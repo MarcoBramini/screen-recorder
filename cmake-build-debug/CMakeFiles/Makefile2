@@ -94,12 +94,12 @@ clean: CMakeFiles/pds_screen_recording.dir/clean
 CMakeFiles/pds_screen_recording.dir/all:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/pds_screen_recording.dir/build.make CMakeFiles/pds_screen_recording.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/pds_screen_recording.dir/build.make CMakeFiles/pds_screen_recording.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/Users/marcobramini/Code/cpp/pds-screen-recording/cmake-build-debug/CMakeFiles --progress-num=1,2 "Built target pds_screen_recording"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/Users/marcobramini/Code/cpp/pds-screen-recording/cmake-build-debug/CMakeFiles --progress-num=1,2,3 "Built target pds_screen_recording"
 .PHONY : CMakeFiles/pds_screen_recording.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/pds_screen_recording.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/marcobramini/Code/cpp/pds-screen-recording/cmake-build-debug/CMakeFiles 2
+	$(CMAKE_COMMAND) -E cmake_progress_start /Users/marcobramini/Code/cpp/pds-screen-recording/cmake-build-debug/CMakeFiles 3
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/pds_screen_recording.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /Users/marcobramini/Code/cpp/pds-screen-recording/cmake-build-debug/CMakeFiles 0
 .PHONY : CMakeFiles/pds_screen_recording.dir/rule

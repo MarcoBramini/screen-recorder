@@ -1,0 +1,16 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/Users/marcobramini/Code/cpp/pds-screen-recording/main.cpp
+iostream
+-
+libavdevice/avdevice.h
+-
+libavformat/avformat.h
+-
+

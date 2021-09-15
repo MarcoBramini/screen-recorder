@@ -1,4 +1,5 @@
 file(REMOVE_RECURSE
+  "CMakeFiles/pds_screen_recording.dir/devices.cpp.o"
   "CMakeFiles/pds_screen_recording.dir/main.cpp.o"
   "pds_screen_recording"
   "pds_screen_recording.pdb"

@@ -3,4 +3,10 @@ project(pds_screen_recording)
 
 set(CMAKE_CXX_STANDARD 20)
 
-add_executable(pds_screen_recording main.cpp)
+include_directories(/usr/local/include)
+link_directories(/usr/local/lib)
+
+add_executable(pds_screen_recording main.cpp devices.cpp devices.h)
+
+target_link_libraries(pds_screen_recording avdevice)
+target_link_libraries(pds_screen_recording avformat)

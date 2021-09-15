@@ -143,6 +143,33 @@ pds_screen_recording/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/pds_screen_recording.dir/build.make CMakeFiles/pds_screen_recording.dir/build
 .PHONY : pds_screen_recording/fast
 
+devices.o: devices.cpp.o
+
+.PHONY : devices.o
+
+# target to build an object file
+devices.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/pds_screen_recording.dir/build.make CMakeFiles/pds_screen_recording.dir/devices.cpp.o
+.PHONY : devices.cpp.o
+
+devices.i: devices.cpp.i
+
+.PHONY : devices.i
+
+# target to preprocess a source file
+devices.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/pds_screen_recording.dir/build.make CMakeFiles/pds_screen_recording.dir/devices.cpp.i
+.PHONY : devices.cpp.i
+
+devices.s: devices.cpp.s
+
+.PHONY : devices.s
+
+# target to generate assembly for a file
+devices.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/pds_screen_recording.dir/build.make CMakeFiles/pds_screen_recording.dir/devices.cpp.s
+.PHONY : devices.cpp.s
+
 main.o: main.cpp.o
 
 .PHONY : main.o
@@ -179,6 +206,9 @@ help:
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
 	@echo "... pds_screen_recording"
+	@echo "... devices.o"
+	@echo "... devices.i"
+	@echo "... devices.s"
 	@echo "... main.o"
 	@echo "... main.i"
 	@echo "... main.s"
