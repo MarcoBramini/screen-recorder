@@ -3,7 +3,9 @@ project(pds_screen_recording)
 
 set(CMAKE_CXX_STANDARD 20)
 
-set(MACOS true)
+file (STRINGS "platform.txt" PLATFORM)
+
+set(${PLATFORM} true)
 
 include_directories(/usr/local/include)
 link_directories(/usr/local/lib)
@@ -30,12 +32,18 @@ add_executable(pds_screen_recording
 
 target_link_libraries(pds_screen_recording avdevice)
 target_link_libraries(pds_screen_recording avformat)
+target_link_libraries(pds_screen_recording avutil)
 
-target_link_libraries(pds_screen_recording
-        "-framework AVFoundation"
-        "-framework CoreGraphics"
-        "-framework CoreMotion"
-        "-framework Foundation"
-        "-framework MediaPlayer"
-        "-framework QuartzCore"
-        )
+if(MACOS)
+    target_link_libraries(pds_screen_recording
+            "-framework AVFoundation"
+            "-framework CoreGraphics"
+            "-framework CoreMotion"
+            "-framework Foundation"
+            "-framework MediaPlayer"
+            "-framework QuartzCore"
+            )
+elseif(LINUX)
+    target_link_libraries(pds_screen_recording X11)
+    target_link_libraries(pds_screen_recording Xrandr)
+endif()
