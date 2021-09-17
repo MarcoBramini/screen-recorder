@@ -1,4 +1,5 @@
 #include <vector>
+#include <stdint.h>
 
 extern "C" {
 #include <libavdevice/avdevice.h>

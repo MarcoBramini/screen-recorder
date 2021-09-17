@@ -6,6 +6,7 @@
 #define PDS_SCREEN_RECORDING_DEVICE_SERVICE_H
 
 #include "input_device.h"
+#include <vector>
 
 class DeviceService{
 public:

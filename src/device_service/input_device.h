@@ -17,19 +17,21 @@ public:
     std::string getID() { return this->id; };
     std::string getName() { return this->name; };
 
-    void toString(){std::cout<<"ID: "<<this->id<<" Name:"<<this->name<<std::endl;};
+    void toString(){std::cout<<"ID: "<<this->id<<" Name: "<<this->name<<std::endl;};
 };
 
 
-class InputDeviceAudio: public InputDevice{
+class InputDeviceAudio: public InputDevice {
 public:
     InputDeviceAudio(const std::string &id, const std::string &name) : InputDevice(id, name) {}
 };
 
-class InputDeviceVideo: public InputDevice{
-    int x,y;
+class InputDeviceVideo: public InputDevice {
+    int x,y, width, height, primary;
+    std::string port;
 public:
-    InputDeviceVideo(const std::string &id, const std::string &name, int x, int y) : InputDevice(id, name), x(x),y(y) {}
+    InputDeviceVideo(const std::string &id, const std::string &name, int x, int y, int width, int height, int primary, std::string port) :
+        InputDevice(id, name), x(x),y(y), width(width), height(height), primary(primary), port(std::move(port)){}
 };
 
 #endif //PDS_SCREEN_RECORDING_INPUT_DEVICE_H
