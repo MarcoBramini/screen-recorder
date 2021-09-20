@@ -10,6 +10,7 @@ extern "C" {
 #include "src/device_service/device_service.h"
 #include "src/device_service/input_device.h"
 int main() {
+    // List all the available input devices
     std::vector<InputDeviceVideo> videoDevices = DeviceService::get_input_video_devices();
     std::vector<InputDeviceAudio> audioDevices = DeviceService::get_input_audio_devices();
 
@@ -21,6 +22,24 @@ int main() {
     for (InputDeviceAudio inDev : audioDevices) {
         inDev.toString();
     }
+
+    // Select the input devices to capture
+    auto videoInDevID = "1";
+    auto audioInDevID = "0";
+
+    // Select recording area
+    //
+
+    // Select output file
+    auto outputFile = "out.mkv";
+
+    // Start recording
+
+    // Pause recording
+
+    // Stop recording
+
+
     return 0;
 }
 

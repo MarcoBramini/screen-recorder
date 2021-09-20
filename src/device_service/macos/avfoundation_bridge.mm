@@ -10,10 +10,8 @@ int avfoundation_list_video_devices(std::vector<InputDeviceVideo> *devices) {
             AVCaptureDeviceTypeBuiltInMicrophone, AVCaptureDeviceTypeBuiltInWideAngleCamera,
             AVCaptureDeviceTypeExternalUnknown]                                                                             mediaType:AVMediaTypeVideo position:AVCaptureDevicePositionUnspecified];
 
-    NSArray *audioInDevs = [captureDeviceDiscoverySession devices];
-    for (AVCaptureDevice *device in audioInDevs) {
-        const char *name = [[device localizedName] UTF8String];
-        (*devices).emplace_back(std::to_string(index), std::string(name),0,0);
+    NSArray *videoInDevs = [captureDeviceDiscoverySession devices];
+    for (AVCaptureDevice *device in videoInDevs) {
         index++;
     }
 
@@ -24,7 +22,10 @@ int avfoundation_list_video_devices(std::vector<InputDeviceVideo> *devices) {
         CGDirectDisplayID screens[numScreens];
         CGGetActiveDisplayList(numScreens, screens, &numScreens);
         for (int i = 0; i < numScreens; i++) {
-            (*devices).emplace_back(std::to_string(index), std::string("Capture screen " + std::to_string(i)),0,0);
+            CGRect rect = CGDisplayBounds(screens[i]);
+            (*devices).emplace_back(std::to_string(index), std::string("Capture screen " + std::to_string(i)),
+                                    rect.origin.x, rect.origin.y, rect.size.width, rect.size.height,
+                                    CGDisplayIsMain(screens[i]), "");
             index++;
         }
     }
