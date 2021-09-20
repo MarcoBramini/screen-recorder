@@ -3,22 +3,18 @@ project(pds_screen_recording)
 
 set(CMAKE_CXX_STANDARD 20)
 
-file (STRINGS "platform.txt" PLATFORM)
-
-set(${PLATFORM} true)
-
 include_directories(/usr/local/include)
 link_directories(/usr/local/lib)
 
-if (MACOS)
+if (${APPLE})
     set(FILES
             src/device_service/macos/avfoundation_bridge.mm
             src/device_service/macos/avfoundation_bridge.h
             src/device_service/macos/device_service_macos.cpp)
-elseif (LINUX)
+elseif (${UNIX})
     set(FILES
             src/device_service/linux/device_service_linux.cpp)
-elseif (WINDOWS)
+elseif (${WIN32})
     set(FILES
             src/device_service/windows/device_service_windows.cpp)
 endif ()
@@ -34,7 +30,7 @@ target_link_libraries(pds_screen_recording avdevice)
 target_link_libraries(pds_screen_recording avformat)
 target_link_libraries(pds_screen_recording avutil)
 
-if(MACOS)
+if(${APPLE})
     target_link_libraries(pds_screen_recording
             "-framework AVFoundation"
             "-framework CoreGraphics"
@@ -43,7 +39,7 @@ if(MACOS)
             "-framework MediaPlayer"
             "-framework QuartzCore"
             )
-elseif(LINUX)
+elseif(${UNIX})
     target_link_libraries(pds_screen_recording X11)
     target_link_libraries(pds_screen_recording Xrandr)
 endif()
