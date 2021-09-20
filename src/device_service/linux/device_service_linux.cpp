@@ -15,7 +15,7 @@ extern "C" {
 std::vector<InputDeviceVideo> DeviceService::get_input_video_devices() {
     std::vector<InputDeviceVideo> devices;
     Display *display;
-    display = XOpenDisplay(0);
+    display = XOpenDisplay(nullptr);
 
     if(display == nullptr) {
         return devices;
@@ -37,7 +37,7 @@ std::vector<InputDeviceVideo> DeviceService::get_input_video_devices() {
         int height = xMonitors[monitorIdx].height;
         int primary = xMonitors[monitorIdx].primary;
         std::string port = XGetAtomName( display, xMonitors[monitorIdx].name);
-        InputDeviceVideo deviceVideo(id,name,x,y,width,height,primary,port);
+        InputDeviceVideo deviceVideo(id,name,static_cast<float>(x), static_cast<float>(y), static_cast<float>(width), static_cast<float>(height) ,primary,port);
         devices.push_back(deviceVideo);
     }
     return devices;
