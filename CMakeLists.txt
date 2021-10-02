@@ -3,8 +3,8 @@ project(pds_screen_recording)
 
 set(CMAKE_CXX_STANDARD 20)
 
-include_directories(/usr/local/include)
-link_directories(/usr/local/lib)
+include_directories("/usr/local/include")
+link_directories("/usr/local/lib")
 
 if (${APPLE})
     set(FILES
@@ -23,12 +23,17 @@ add_executable(pds_screen_recording
         main.cpp
         src/device_service/input_device.h
         src/device_service/device_service.h
-        ${FILES})
+        src/recording_service/recording_service.cpp
+        src/recording_service/recording_service.h
+        src/recording_service/input_streaming_context.h
+        src/recording_service/output_streaming_context.h
+        ${FILES} )
 
 
 target_link_libraries(pds_screen_recording avdevice)
 target_link_libraries(pds_screen_recording avformat)
 target_link_libraries(pds_screen_recording avutil)
+target_link_libraries(pds_screen_recording avcodec)
 
 if(${APPLE})
     target_link_libraries(pds_screen_recording
