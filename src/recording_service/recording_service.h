@@ -14,18 +14,18 @@ class RecordingService {
     InputStreamingContext *inputAuxCtx;
     OutputStreamingContext *outputCtx;
 
+    
 
-    AVFormatContext *open_input_device(std::string deviceID, std::string url);
+    static AVFormatContext *open_input_device(const std::string& deviceID, const std::string& videoID, const std::string& audioID);
 
-    int open_input_stream_decoder(AVStream *inputStream, const AVCodec **inputCodec, AVCodecContext **inputCodecCtx);
+    static int open_input_stream_decoder(AVStream *inputStream, const AVCodec **inputCodec, AVCodecContext **inputCodecCtx);
 
-    OutputStreamingContext open_output_file(const std::string &filename);
+    static AVFormatContext * open_output_file(const std::string &filename);
 
-    int start_recording_loop(InputStreamingContext inputCtx,
-                             std::optional<InputStreamingContext> inputAuxCtx,
-                             OutputStreamingContext outputCtx);
+    int start_recording_loop();
 
 public:
+    bool mustTerminate;
     RecordingService(const std::string &videoInDevID, const std::string &audioInDevID,
                      const std::string &outputFilename);
 
@@ -36,6 +36,17 @@ public:
     int resume_recording();
 
     int stop_recording();
+
+    static int prepare_video_encoder(InputStreamingContext *inputCtx, OutputStreamingContext *outputCtx);
+
+    static int prepare_audio_encoder(InputStreamingContext *inputCtx, OutputStreamingContext *outputCtx);
+
+    int encode_video(AVFrame *videoInputFrame);
+
+    int transcode_video(InputStreamingContext *input, OutputStreamingContext *output, AVPacket *videoInputPacket,
+                        AVFrame *videoInputFrame);
+
+    int transcode_video(AVPacket *videoInputPacket, AVFrame *videoInputFrame);
 };
 
 
