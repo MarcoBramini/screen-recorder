@@ -8,24 +8,62 @@
 #include "input_streaming_context.h"
 #include "output_streaming_context.h"
 
-
 class RecordingService {
-    InputStreamingContext *inputCtx;
-    InputStreamingContext *inputAuxCtx;
-    OutputStreamingContext *outputCtx;
+    // Input context
+    AVFormatContext *inputAvfc;
+    AVFormatContext *inputAuxAvfc;
 
-    
+    // Input video properties
+    const AVCodec *inputVideoAvc;
+    AVStream *inputVideoAvs;
+    AVCodecContext *inputVideoAvcc;
+    int inputVideoIndex;
 
-    static AVFormatContext *open_input_device(const std::string& deviceID, const std::string& videoID, const std::string& audioID);
+    // Input audio properties
+    const AVCodec *inputAudioAvc;
+    AVStream *inputAudioAvs;
+    AVCodecContext *inputAudioAvcc;
+    int inputAudioIndex;
 
-    static int open_input_stream_decoder(AVStream *inputStream, const AVCodec **inputCodec, AVCodecContext **inputCodecCtx);
+    // Output context
+    AVFormatContext *outputAvfc;
+    std::string filename;
 
-    static AVFormatContext * open_output_file(const std::string &filename);
+    // Output video properties
+    const AVCodec *outputVideoAvc;
+    AVStream *outputVideoAvs;
+    AVCodecContext *outputVideoAvcc;
+
+    // Output audio properties
+    const AVCodec *outputAudioAvc;
+    AVStream *outputAudioAvs;
+    AVCodecContext *outputAudioAvcc;
+
+
+    static AVFormatContext *
+    open_input_device(const std::string &deviceID, const std::string &videoID, const std::string &audioID);
+
+    static int
+    open_input_stream_decoder(AVStream *inputStream, const AVCodec **inputCodec, AVCodecContext **inputCodecCtx);
+
+    static AVFormatContext *open_output_file(const std::string &filename);
+
+    int prepare_audio_encoder();
+
+    int prepare_video_encoder();
 
     int start_recording_loop();
 
+    int encode_video(AVFrame *videoInputFrame);
+
+    int transcode_video(AVPacket *videoInputPacket, AVFrame *videoInputFrame);
+
+
+    int transcode_audio(AVPacket *audioInputPacket, AVFrame *audioInputFrame);
+
+    int encode_audio(AVFrame *audioInputFrame);
+
 public:
-    bool mustTerminate;
     RecordingService(const std::string &videoInDevID, const std::string &audioInDevID,
                      const std::string &outputFilename);
 
@@ -37,16 +75,7 @@ public:
 
     int stop_recording();
 
-    static int prepare_video_encoder(InputStreamingContext *inputCtx, OutputStreamingContext *outputCtx);
 
-    static int prepare_audio_encoder(InputStreamingContext *inputCtx, OutputStreamingContext *outputCtx);
-
-    int encode_video(AVFrame *videoInputFrame);
-
-    int transcode_video(InputStreamingContext *input, OutputStreamingContext *output, AVPacket *videoInputPacket,
-                        AVFrame *videoInputFrame);
-
-    int transcode_video(AVPacket *videoInputPacket, AVFrame *videoInputFrame);
 };
 
 
