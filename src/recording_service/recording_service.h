@@ -4,11 +4,15 @@
 #include <optional>
 #include <string>
 #include <iostream>
+#include <thread>
 
 #include "input_streaming_context.h"
 #include "output_streaming_context.h"
 
 class RecordingService {
+
+    std::thread recordingThread;
+
     // Input context
     AVFormatContext *inputAvfc;
     AVFormatContext *inputAuxAvfc;

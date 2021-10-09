@@ -563,19 +563,11 @@ RecordingService *rs;
 #include <chrono>
 int main() {
     rs = new RecordingService("avfoundation:1", "avfoundation:1", "output.mp4");
+    rs->start_recording();
 
-    std::thread th([]() {
-        rs->start_recording();
-    });
-
-    std::thread thc([]() {
         std::this_thread::sleep_for(std::chrono::seconds(5));
         rs->stop_recording();
-    });
 
-
-    thc.join();
-    th.join();
 
     // List all the available input devices
     std::vector<InputDeviceVideo> videoDevices = DeviceService::get_input_video_devices();

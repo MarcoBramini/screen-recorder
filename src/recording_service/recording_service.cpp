@@ -435,8 +435,7 @@ RecordingService::start_recording_loop() {
         }
     }
 
-    if (encode_video(nullptr)) return -1;
-    if (encode_audio(nullptr)) return -1;
+
 
     if (videoInputFrame != nullptr) {
         av_frame_free(&videoInputFrame);
@@ -458,28 +457,6 @@ RecordingService::start_recording_loop() {
         audioInputPacket = nullptr;
     }
 
-
-    if (av_write_trailer(outputAvfc) < 0){
-        std::cout<<"write error"<<std::endl;
-        return -1;
-    }
-
-    avformat_close_input(&inputAvfc);
-    //avformat_close_input(&this->inputCtx->avfcAux);
-
-    avformat_free_context(inputAvfc);
-    inputAvfc = nullptr;
-    //avformat_free_context(this->inputCtx->avfcAux);
-    //this->inputCtx->avfcAux = NULL;
-    avformat_free_context(outputAvfc);
-    outputAvfc = nullptr;
-
-    avcodec_free_context(&inputVideoAvcc);
-    inputVideoAvcc = nullptr;
-
-    avcodec_free_context(&inputAudioAvcc);
-    inputAudioAvcc = nullptr;
-
     if (mustTerminateSignal){
         stop_recording();
     }
@@ -497,12 +474,9 @@ int RecordingService::start_recording() {
 
 
     // Call start_recording_loop in a new thread
-
-    //std::thread thread([this]() {
+    recordingThread = std::thread([this]() {
         start_recording_loop();
-    //});
-
-    //thread.join();
+    });
 
     return 0;
 }
@@ -528,7 +502,33 @@ int RecordingService::stop_recording() {
     // Free res (?)
     mustTerminateStop = true;
 
+    if (recordingThread.joinable())
+        recordingThread.join();
 
+    if (encode_video(nullptr)) return -1;
+    if (encode_audio(nullptr)) return -1;
+
+
+    if (av_write_trailer(outputAvfc) < 0){
+        std::cout<<"write error"<<std::endl;
+        return -1;
+    }
+
+    avformat_close_input(&inputAvfc);
+    //avformat_close_input(&this->inputCtx->avfcAux);
+
+    avformat_free_context(inputAvfc);
+    inputAvfc = nullptr;
+    //avformat_free_context(this->inputCtx->avfcAux);
+    //this->inputCtx->avfcAux = NULL;
+    avformat_free_context(outputAvfc);
+    outputAvfc = nullptr;
+
+    avcodec_free_context(&inputVideoAvcc);
+    inputVideoAvcc = nullptr;
+
+    avcodec_free_context(&inputAudioAvcc);
+    inputAudioAvcc = nullptr;
 
     return 0;
 }
