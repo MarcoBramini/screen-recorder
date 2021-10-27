@@ -5,13 +5,25 @@
 #include <string>
 #include <iostream>
 #include <thread>
+#include <queue>
 
-#include "input_streaming_context.h"
-#include "output_streaming_context.h"
+extern "C" {
+#include <libavformat/avformat.h>
+#include <libavcodec/avcodec.h>
+#include <libswresample/swresample.h>
+#include <libavutil/audio_fifo.h>
+}
 
 class RecordingService {
 
-    std::thread recordingThread;
+    std::thread captureThread;
+    std::thread audioProcessThread;
+    std::thread videoProcessThread;
+
+    std::queue<AVPacket *> videoPacketsQueue;
+    std::queue<AVPacket *> audioPacketsQueue;
+
+    int64_t rec_start_time;
 
     // Input context
     AVFormatContext *inputAvfc;
@@ -28,6 +40,10 @@ class RecordingService {
     AVStream *inputAudioAvs;
     AVCodecContext *inputAudioAvcc;
     int inputAudioIndex;
+
+    // Audio converter
+    SwrContext *audioConverter;
+    AVAudioFifo *audioBuffer;
 
     // Output context
     AVFormatContext *outputAvfc;
@@ -54,18 +70,21 @@ class RecordingService {
 
     int prepare_audio_encoder();
 
+    int prepare_audio_converter();
+
     int prepare_video_encoder();
 
     int start_recording_loop();
 
     int encode_video(AVFrame *videoInputFrame);
 
-    int transcode_video(AVPacket *videoInputPacket, AVFrame *videoInputFrame);
+    int transcode_video(AVPacket *videoInputPacket);
 
+    int transcode_audio(AVPacket *audioInputPacket);
 
-    int transcode_audio(AVPacket *audioInputPacket, AVFrame *audioInputFrame);
+    int convert_audio(AVFrame *audioInputFrame);
 
-    int encode_audio(AVFrame *audioInputFrame);
+    int encode_audio_from_buffer(bool shouldFlush);
 
 public:
     RecordingService(const std::string &videoInDevID, const std::string &audioInDevID,
@@ -80,6 +99,9 @@ public:
     int stop_recording();
 
 
+    int process_video_queue();
+
+    int process_audio_queue();
 };
 
 

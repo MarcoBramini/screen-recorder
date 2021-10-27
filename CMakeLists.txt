@@ -34,6 +34,7 @@ target_link_libraries(pds_screen_recording avdevice)
 target_link_libraries(pds_screen_recording avformat)
 target_link_libraries(pds_screen_recording avutil)
 target_link_libraries(pds_screen_recording avcodec)
+target_link_libraries(pds_screen_recording swresample)
 
 if(${APPLE})
     target_link_libraries(pds_screen_recording
