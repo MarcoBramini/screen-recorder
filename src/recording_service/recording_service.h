@@ -20,10 +20,8 @@ class RecordingService {
     std::thread audioProcessThread;
     std::thread videoProcessThread;
 
-    std::queue<AVPacket *> videoPacketsQueue;
-    std::queue<AVPacket *> audioPacketsQueue;
-
-    int64_t rec_start_time;
+    std::queue<std::tuple<AVPacket *, int64_t>> videoPacketsQueue;
+    std::queue<std::tuple<AVPacket *, int64_t>> audioPacketsQueue;
 
     // Input context
     AVFormatContext *inputAvfc;
@@ -74,17 +72,9 @@ class RecordingService {
 
     int prepare_video_encoder();
 
-    int start_recording_loop();
-
-    int encode_video(AVFrame *videoInputFrame);
-
-    int transcode_video(AVPacket *videoInputPacket);
-
-    int transcode_audio(AVPacket *audioInputPacket);
+    int start_capture_loop();
 
     int convert_audio(AVFrame *audioInputFrame);
-
-    int encode_audio_from_buffer(bool shouldFlush);
 
 public:
     RecordingService(const std::string &videoInDevID, const std::string &audioInDevID,
@@ -102,6 +92,14 @@ public:
     int process_video_queue();
 
     int process_audio_queue();
+
+    int encode_audio_from_buffer(int64_t framePts, bool shouldFlush);
+
+    int encode_video(int64_t framePts, AVFrame *videoInputFrame);
+
+    int transcode_video(AVPacket *videoInputPacket, int64_t packetPts);
+
+    int transcode_audio(AVPacket *audioInputPacket, int64_t packetPts);
 };
 
 

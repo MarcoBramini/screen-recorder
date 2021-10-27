@@ -237,10 +237,9 @@ int RecordingService::prepare_audio_encoder() {
 
     return 0;
 }
-int64_t last_video_pts = 0;
-int64_t last_encoded_dts = -1;
 
-int RecordingService::encode_video(AVFrame *videoInputFrame) {
+int64_t last_encoded_dts = -1;
+int RecordingService::encode_video(int64_t framePts, AVFrame *videoInputFrame) {
     if (videoInputFrame) videoInputFrame->pict_type = AV_PICTURE_TYPE_NONE;
 
     AVPacket *output_packet = av_packet_alloc();
@@ -251,8 +250,7 @@ int RecordingService::encode_video(AVFrame *videoInputFrame) {
     }
 
     if (videoInputFrame != nullptr) {
-        videoInputFrame->pts = av_rescale_q(last_video_pts, {1, 1000}, outputVideoAvcc->time_base);
-        last_video_pts += (int) (1000 / 30);
+        videoInputFrame->pts = av_rescale_q(framePts, {1, 1000}, outputVideoAvcc->time_base);
     }
 
     int response = avcodec_send_frame(outputVideoAvcc, videoInputFrame);
@@ -290,7 +288,7 @@ int RecordingService::encode_video(AVFrame *videoInputFrame) {
 }
 
 
-int RecordingService::transcode_video(AVPacket *videoInputPacket) {
+int RecordingService::transcode_video(AVPacket *videoInputPacket, int64_t packetPts) {
     AVFrame *videoInputFrame = av_frame_alloc();
     if (videoInputFrame == nullptr) {
         //Handle
@@ -313,7 +311,7 @@ int RecordingService::transcode_video(AVPacket *videoInputPacket) {
         }
 
         if (response >= 0) {
-            if (encode_video(videoInputFrame)) {
+            if (encode_video(packetPts,videoInputFrame)) {
                 std::cout << "error encoding frame" << std::endl;
                 return -1;
             }
@@ -353,17 +351,14 @@ int RecordingService::convert_audio(AVFrame *audioInputFrame) {
     return 0;
 }
 
-int64_t last_audio_pts = 0;
 
-int RecordingService::encode_audio_from_buffer(bool shouldFlush) {
+int RecordingService::encode_audio_from_buffer(int64_t framePts, bool shouldFlush) {
 
     AVPacket *output_packet = av_packet_alloc();
     if (!output_packet) {
         std::cout << "could not allocate memory for output packet" << std::endl;
         return -1;
     }
-
-    int64_t frameDuration = av_get_audio_frame_duration(outputAudioAvcc, outputAudioAvcc->frame_size);
 
     while (av_audio_fifo_size(audioBuffer) >= outputAudioAvcc->frame_size) {
         AVFrame *outputFrame = nullptr;
@@ -380,10 +375,7 @@ int RecordingService::encode_audio_from_buffer(bool shouldFlush) {
             outputFrame->format = outputAudioSampleFormat;
             outputFrame->sample_rate = outputAudioAvcc->sample_rate;
 
-            if (outputFrame != nullptr) {
-                outputFrame->pts = last_audio_pts;
-                last_audio_pts += frameDuration;
-            }
+            outputFrame->pts = framePts;
 
             if (av_frame_get_buffer(outputFrame, 0) < 0) {
                 throw std::runtime_error("Error reading from audio buffer");
@@ -406,10 +398,6 @@ int RecordingService::encode_audio_from_buffer(bool shouldFlush) {
             }
 
             output_packet->stream_index = inputAudioIndex;
-            output_packet->duration = av_rescale_q(frameDuration, outputAudioAvcc->time_base,
-                                                   outputAudioAvs->time_base);
-            output_packet->pts = output_packet->dts = av_rescale_q(output_packet->pts, outputAudioAvcc->time_base,
-                                                                   outputAudioAvs->time_base);
             //std::cout << "write audio dts" << output_packet->pts << std::endl;
             response = av_interleaved_write_frame(outputAvfc, output_packet);
             if (response != 0) {
@@ -429,7 +417,7 @@ int RecordingService::encode_audio_from_buffer(bool shouldFlush) {
     return 0;
 }
 
-int RecordingService::transcode_audio(AVPacket *audioInputPacket) {
+int RecordingService::transcode_audio(AVPacket *audioInputPacket, int64_t packetPts) {
     AVFrame *audioInputFrame = av_frame_alloc();
     if (audioInputFrame == nullptr) {
         //Handle
@@ -456,7 +444,7 @@ int RecordingService::transcode_audio(AVPacket *audioInputPacket) {
                 throw std::runtime_error("Error converting audio frame");
             }
 
-            if (encode_audio_from_buffer(false) < 0) {
+            if (encode_audio_from_buffer(packetPts, false) < 0) {
                 throw std::runtime_error("Error converting audio frame");
             }
         }
@@ -469,7 +457,7 @@ int RecordingService::transcode_audio(AVPacket *audioInputPacket) {
 }
 
 int
-RecordingService::start_recording_loop() {
+RecordingService::start_capture_loop() {
     // if inputAuxCtx == nullptr
     //  -> read frame from device (loop not blocked)
     //  -> open video thread
@@ -494,25 +482,32 @@ RecordingService::start_recording_loop() {
         return -1;
     }
 
+    int64_t last_video_pts = 0;
+    int64_t last_audio_pts = 0;
+    int64_t frameDuration = av_get_audio_frame_duration(outputAudioAvcc, outputAudioAvcc->frame_size);
+
     if (inputAuxAvfc == nullptr) {
-        int res = 0;
-        while (res >= 0) {
-
-            res = av_read_frame(inputAvfc, inputPacket);
-
-            if (res == AVERROR(EAGAIN)) {
-                res = 0;
+        while (true) {
+            int res = av_read_frame(inputAvfc, inputPacket);
+            if (res == AVERROR(EAGAIN))
                 continue;
+
+            if (res < 0){
+                std::string error = "Capture failed with:";
+                error.append(av_err2str(res));
+                throw std::runtime_error(error);
             }
 
             if (inputAvfc->streams[inputPacket->stream_index]->codecpar->codec_type ==
                 AVMEDIA_TYPE_VIDEO) {
                 auto videoPacket = av_packet_clone(inputPacket);
-                videoPacketsQueue.push(videoPacket);
+                videoPacketsQueue.push(std::make_tuple(videoPacket, last_video_pts) );
+                last_video_pts += (int) (1000 / 30);
             } else if (inputAvfc->streams[inputPacket->stream_index]->codecpar->codec_type ==
                        AVMEDIA_TYPE_AUDIO) {
                 auto audioPacket = av_packet_clone(inputPacket);
-                audioPacketsQueue.push(audioPacket);
+                audioPacketsQueue.push(std::make_tuple(audioPacket, last_audio_pts));
+                last_audio_pts += frameDuration/2;
             }
 
             if (mustTerminateSignal || mustTerminateStop) {
@@ -535,10 +530,13 @@ RecordingService::start_recording_loop() {
 int RecordingService::process_video_queue() {
     while (!mustTerminateStop && !mustTerminateSignal) {
         if (videoPacketsQueue.empty()) continue;
-        auto videoPacket = videoPacketsQueue.front();
+
+        AVPacket * videoPacket;
+        int64_t packetPts;
+        std::tie(videoPacket, packetPts) = videoPacketsQueue.front();
         videoPacketsQueue.pop();
 
-        int ret = transcode_video(videoPacket);
+        int ret = transcode_video(videoPacket, packetPts);
         if (ret < 0) {
             // Handle
             return -1;
@@ -551,10 +549,12 @@ int RecordingService::process_audio_queue() {
     while (!mustTerminateStop && !mustTerminateSignal) {
         if (audioPacketsQueue.empty()) continue;
 
-        auto audioPacket = audioPacketsQueue.front();
+        AVPacket * audioPacket;
+        int64_t packetPts;
+        std::tie(audioPacket, packetPts) = audioPacketsQueue.front();
         audioPacketsQueue.pop();
 
-        int ret = transcode_audio(audioPacket);
+        int ret = transcode_audio(audioPacket, packetPts);
         if (ret < 0) {
             // Handle
             return -1;
@@ -573,7 +573,7 @@ int RecordingService::start_recording() {
 
     // Call start_recording_loop in a new thread
     captureThread = std::thread([this]() {
-        start_recording_loop();
+        start_capture_loop();
     });
 
     videoProcessThread = std::thread([this]() {
@@ -619,8 +619,8 @@ int RecordingService::stop_recording() {
     if (audioProcessThread.joinable())
         audioProcessThread.join();
 
-    if (encode_video(nullptr)) return -1;
-    if (encode_audio_from_buffer(true)) return -1;
+    if (encode_video(0, nullptr)) return -1;
+    if (encode_audio_from_buffer(0, true)) return -1;
 
     if (av_write_trailer(outputAvfc) < 0) {
         std::cout << "write error" << std::endl;
