@@ -25,8 +25,6 @@ add_executable(pds_screen_recording
         src/device_service/device_service.h
         src/recording_service/recording_service.cpp
         src/recording_service/recording_service.h
-        src/recording_service/input_streaming_context.h
-        src/recording_service/output_streaming_context.h
         ${FILES} )
 
 
@@ -35,6 +33,7 @@ target_link_libraries(pds_screen_recording avformat)
 target_link_libraries(pds_screen_recording avutil)
 target_link_libraries(pds_screen_recording avcodec)
 target_link_libraries(pds_screen_recording swresample)
+target_link_libraries(pds_screen_recording swscale)
 
 if(${APPLE})
     target_link_libraries(pds_screen_recording
