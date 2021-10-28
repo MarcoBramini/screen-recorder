@@ -12,6 +12,7 @@ extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libswresample/swresample.h>
 #include <libavutil/audio_fifo.h>
+#include <libswscale/swscale.h>
 }
 
 class RecordingService {
@@ -32,6 +33,9 @@ class RecordingService {
     AVStream *inputVideoAvs;
     AVCodecContext *inputVideoAvcc;
     int inputVideoIndex;
+
+    // Video converter
+    SwsContext* videoConverter;
 
     // Input audio properties
     const AVCodec *inputAudioAvc;
@@ -71,10 +75,12 @@ class RecordingService {
     int prepare_audio_converter();
 
     int prepare_video_encoder();
+    int prepare_video_converter();
 
     int start_capture_loop();
 
     int convert_audio(AVFrame *audioInputFrame);
+    int convert_video(AVFrame *videoInputFrame);
 
 public:
     RecordingService(const std::string &videoInDevID, const std::string &audioInDevID,
@@ -100,6 +106,8 @@ public:
     int transcode_video(AVPacket *videoInputPacket, int64_t packetPts);
 
     int transcode_audio(AVPacket *audioInputPacket, int64_t packetPts);
+
+    int convert_video(AVFrame *videoInputFrame, AVFrame *videoOutputFrame);
 };
 
 

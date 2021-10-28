@@ -7,14 +7,14 @@ extern "C" {
 #include <libavdevice/avdevice.h>
 #include <libavutil/channel_layout.h>
 #include <libavutil/avutil.h>
-#include <libavutil/time.h>
+#include <libavutil/imgutils.h>
 }
-
 
 static bool mustTerminateSignal = false;
 static bool mustTerminateStop = false;
 
 const AVSampleFormat outputAudioSampleFormat = AV_SAMPLE_FMT_FLTP;
+const AVPixelFormat outputVideoPixelFormat = AV_PIX_FMT_YUV420P;
 
 AVFormatContext *RecordingService::open_input_device(const std::string &deviceID, const std::string &videoID,
                                                      const std::string &audioID) {
@@ -27,27 +27,15 @@ AVFormatContext *RecordingService::open_input_device(const std::string &deviceID
         return nullptr;
     }
 
-    int ret;
-
     auto *inputFormat = av_find_input_format(deviceID.c_str());
 
     AVDictionary *options = nullptr;
-    ret = av_dict_set(&options, "pixel_format", "nv12", 0);
-    if (ret < 0) {
-        std::cout << "error setting input options" << std::endl;
-        return nullptr;
-    }
-    ret = av_dict_set(&options, "framerate", "30", 0);
+    int ret = av_dict_set(&options, "framerate", "30", 0);
     if (ret < 0) {
         std::cout << "error setting input options" << std::endl;
         return nullptr;
     }
     ret = av_dict_set(&options, "capture_cursor", "true", 0);
-    if (ret < 0) {
-        std::cout << "error setting input options" << std::endl;
-        return nullptr;
-    }
-    ret = av_dict_set(&options, "video_size", "1920x1080", 1);
     if (ret < 0) {
         std::cout << "error setting input options" << std::endl;
         return nullptr;
@@ -149,7 +137,7 @@ int RecordingService::prepare_video_encoder() {
     /*if (outputCtx->videoAvc->pix_fmts)
         outputVideoAvcc->pix_fmt = outputCtx->videoAvc->pix_fmts[0];
     else*/
-    outputVideoAvcc->pix_fmt = inputVideoAvcc->pix_fmt;
+    outputVideoAvcc->pix_fmt = outputVideoPixelFormat;
     outputVideoAvcc->bit_rate = 1000000;
 
     outputVideoAvcc->time_base = {1, 30};
@@ -168,6 +156,13 @@ int RecordingService::prepare_video_encoder() {
 
     return 0;
 
+}
+
+int RecordingService::prepare_video_converter() {
+    videoConverter = sws_getContext(inputVideoAvcc->width, inputVideoAvcc->height, inputVideoAvcc->pix_fmt,
+                                    outputVideoAvcc->width, outputVideoAvcc->height, outputVideoPixelFormat,
+                                    SWS_BICUBIC,
+                                    nullptr, nullptr, nullptr);
 }
 
 int RecordingService::prepare_audio_converter() {
@@ -239,6 +234,20 @@ int RecordingService::prepare_audio_encoder() {
 }
 
 int64_t last_encoded_dts = -1;
+
+int RecordingService::convert_video(AVFrame *videoInputFrame, AVFrame *videoOutputFrame) {
+    //AVFrame *outputFrame = av_frame_alloc();
+    av_image_alloc(videoOutputFrame->data, videoOutputFrame->linesize, outputVideoAvcc->width, outputVideoAvcc->height,
+                   outputVideoPixelFormat, 0);
+    av_image_fill_arrays(videoOutputFrame->data, videoOutputFrame->linesize, nullptr, outputVideoPixelFormat, outputVideoAvcc->width,
+                         outputVideoAvcc->height, 0);
+
+    if (sws_scale_frame(videoConverter, videoOutputFrame, videoInputFrame) < 0) {
+        throw std::runtime_error("failed converting video frame");
+    }
+    return 0;
+}
+
 int RecordingService::encode_video(int64_t framePts, AVFrame *videoInputFrame) {
     if (videoInputFrame) videoInputFrame->pict_type = AV_PICTURE_TYPE_NONE;
 
@@ -311,9 +320,13 @@ int RecordingService::transcode_video(AVPacket *videoInputPacket, int64_t packet
         }
 
         if (response >= 0) {
-            if (encode_video(packetPts,videoInputFrame)) {
-                std::cout << "error encoding frame" << std::endl;
-                return -1;
+            AVFrame *convertedFrame = av_frame_alloc();
+            if (convert_video(videoInputFrame, convertedFrame) < 0) {
+                throw std::runtime_error("Error converting video frame");
+            }
+            if (encode_video(packetPts, convertedFrame)) {
+                throw std::runtime_error("Error converting audio frame");
+
             }
         }
         av_frame_unref(videoInputFrame);
@@ -492,7 +505,7 @@ RecordingService::start_capture_loop() {
             if (res == AVERROR(EAGAIN))
                 continue;
 
-            if (res < 0){
+            if (res < 0) {
                 std::string error = "Capture failed with:";
                 error.append(av_err2str(res));
                 throw std::runtime_error(error);
@@ -501,13 +514,13 @@ RecordingService::start_capture_loop() {
             if (inputAvfc->streams[inputPacket->stream_index]->codecpar->codec_type ==
                 AVMEDIA_TYPE_VIDEO) {
                 auto videoPacket = av_packet_clone(inputPacket);
-                videoPacketsQueue.push(std::make_tuple(videoPacket, last_video_pts) );
+                videoPacketsQueue.push(std::make_tuple(videoPacket, last_video_pts));
                 last_video_pts += (int) (1000 / 30);
             } else if (inputAvfc->streams[inputPacket->stream_index]->codecpar->codec_type ==
                        AVMEDIA_TYPE_AUDIO) {
                 auto audioPacket = av_packet_clone(inputPacket);
                 audioPacketsQueue.push(std::make_tuple(audioPacket, last_audio_pts));
-                last_audio_pts += frameDuration/2;
+                last_audio_pts += frameDuration / 2;
             }
 
             if (mustTerminateSignal || mustTerminateStop) {
@@ -531,7 +544,7 @@ int RecordingService::process_video_queue() {
     while (!mustTerminateStop && !mustTerminateSignal) {
         if (videoPacketsQueue.empty()) continue;
 
-        AVPacket * videoPacket;
+        AVPacket *videoPacket;
         int64_t packetPts;
         std::tie(videoPacket, packetPts) = videoPacketsQueue.front();
         videoPacketsQueue.pop();
@@ -549,7 +562,7 @@ int RecordingService::process_audio_queue() {
     while (!mustTerminateStop && !mustTerminateSignal) {
         if (audioPacketsQueue.empty()) continue;
 
-        AVPacket * audioPacket;
+        AVPacket *audioPacket;
         int64_t packetPts;
         std::tie(audioPacket, packetPts) = audioPacketsQueue.front();
         audioPacketsQueue.pop();
@@ -719,6 +732,7 @@ RecordingService::RecordingService(const std::string &videoInDevID, const std::s
 
     // Set class attributes
     prepare_video_encoder();
+    prepare_video_converter();
     prepare_audio_encoder();
     prepare_audio_converter();
 
