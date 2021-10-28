@@ -1,494 +1,13 @@
 #include "recording_service.h"
 #include <thread>
 #include <csignal>
-#include <queue>
-
-extern "C" {
-#include <libavdevice/avdevice.h>
-#include <libavutil/channel_layout.h>
-#include <libavutil/avutil.h>
-#include <libavutil/imgutils.h>
-}
+#include <map>
+#include <fmt/core.h>
 
 static bool mustTerminateSignal = false;
 static bool mustTerminateStop = false;
 
-const AVSampleFormat outputAudioSampleFormat = AV_SAMPLE_FMT_FLTP;
-const AVPixelFormat outputVideoPixelFormat = AV_PIX_FMT_YUV420P;
-
-AVFormatContext *RecordingService::open_input_device(const std::string &deviceID, const std::string &videoID,
-                                                     const std::string &audioID) {
-    std::string url = videoID + ":" + audioID;
-
-    AVFormatContext *ctx = avformat_alloc_context();
-    if (!ctx) {
-        // Handle ctx allocation error
-        std::cout << "error during AVFormatContext allocation" << std::endl;
-        return nullptr;
-    }
-
-    auto *inputFormat = av_find_input_format(deviceID.c_str());
-
-    AVDictionary *options = nullptr;
-    int ret = av_dict_set(&options, "framerate", "30", 0);
-    if (ret < 0) {
-        std::cout << "error setting input options" << std::endl;
-        return nullptr;
-    }
-    ret = av_dict_set(&options, "capture_cursor", "true", 0);
-    if (ret < 0) {
-        std::cout << "error setting input options" << std::endl;
-        return nullptr;
-    }
-
-    ret = avformat_open_input(&ctx, url.c_str(), inputFormat, &options);
-    if (ret < 0) {
-        // Handle open input error
-        std::cout << "error opening input format" << std::endl;
-        return nullptr;
-    }
-
-    ctx->probesize = 100000000;
-    ret = avformat_find_stream_info(ctx, nullptr);
-    if (ret < 0) {
-        // Handle find stream info error
-        std::cout << "error finding stream info" << std::endl;
-        return nullptr;
-    }
-    return ctx;
-}
-
-int RecordingService::open_input_stream_decoder(AVStream *inputStream, const AVCodec **inputCodec,
-                                                AVCodecContext **inputCodecCtx) {
-    *inputCodec = avcodec_find_decoder(inputStream->codecpar->codec_id);
-    if (!*inputCodec) {
-        std::cout << "failed to find the codec" << std::endl;
-        return -1;
-    }
-
-    *inputCodecCtx = avcodec_alloc_context3(*inputCodec);
-    if (!*inputCodecCtx) {
-        std::cout << "failed to alloc memory for codec context" << std::endl;
-        return -1;
-    }
-
-    if (avcodec_parameters_to_context(*inputCodecCtx, inputStream->codecpar) < 0) {
-        std::cout << "failed to fill codec context" << std::endl;
-        return -1;
-    }
-
-    if (avcodec_open2(*inputCodecCtx, *inputCodec, nullptr) < 0) {
-        std::cout << "failed to open codec" << std::endl;
-        return -1;
-    }
-    return 0;
-}
-
-AVFormatContext *RecordingService::open_output_file(const std::string &filename) {
-    AVFormatContext *avfc;
-    avformat_alloc_output_context2(&avfc, nullptr, nullptr, filename.c_str());
-    if (!avfc) {
-        //Handle null context
-    }
-
-    if (avfc->oformat->flags & AVFMT_GLOBALHEADER)
-        avfc->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
-
-    if (!(avfc->oformat->flags & AVFMT_NOFILE)) {
-        if (avio_open(&avfc->pb, filename.c_str(), AVIO_FLAG_WRITE) < 0) {
-            //Handle
-            return nullptr;
-        }
-    }
-
-    return avfc;
-}
-
-
-int RecordingService::prepare_video_encoder() {
-    AVRational input_framerate = av_guess_frame_rate(inputAvfc, inputVideoAvs, nullptr);
-
-    outputVideoAvs = avformat_new_stream(outputAvfc, nullptr);
-    if (!outputVideoAvs) {
-        //Handle err alloc stream
-        std::cout << "error allocating encoder video AVStream" << std::endl;
-        return -1;
-    }
-
-    outputVideoAvc = avcodec_find_encoder(AV_CODEC_ID_H264);
-    if (!outputVideoAvc) {
-        //Handle encoder not found
-        std::cout << "error encoder video not found" << std::endl;
-        return -1;
-    }
-    outputVideoAvcc = avcodec_alloc_context3(outputVideoAvc);
-
-    if (!outputVideoAvcc) {
-        //Handle err alloc context
-        std::cout << "error allocating encoder video AVCodecContext" << std::endl;
-        return -1;
-    }
-    av_opt_set(outputVideoAvcc->priv_data, "preset", "ultrafast", 0);
-    av_opt_set(outputVideoAvcc->priv_data, "x264-params", "keyint=60:min-keyint=60:scenecut=0:force-cfr=1",
-               0);
-    outputVideoAvcc->height = inputVideoAvcc->height;
-    outputVideoAvcc->width = inputVideoAvcc->width;
-    outputVideoAvcc->sample_aspect_ratio = inputVideoAvcc->sample_aspect_ratio;
-    /*if (outputCtx->videoAvc->pix_fmts)
-        outputVideoAvcc->pix_fmt = outputCtx->videoAvc->pix_fmts[0];
-    else*/
-    outputVideoAvcc->pix_fmt = outputVideoPixelFormat;
-    outputVideoAvcc->bit_rate = 1000000;
-
-    outputVideoAvcc->time_base = {1, 30};
-
-    if (avcodec_open2(outputVideoAvcc, outputVideoAvc, nullptr) < 0) {
-        //Handle
-        std::cout << "error opening enconder video codec" << std::endl;
-        return -1;
-    }
-    if (avcodec_parameters_from_context(outputVideoAvs->codecpar, outputVideoAvcc)) {
-        //Handle
-        std::cout << "error copying encoder video stream parameters to codec context" << std::endl;
-        return -1;
-    }
-    outputVideoAvs->time_base = {1, 1000};
-
-    return 0;
-
-}
-
-int RecordingService::prepare_video_converter() {
-    videoConverter = sws_getContext(inputVideoAvcc->width, inputVideoAvcc->height, inputVideoAvcc->pix_fmt,
-                                    outputVideoAvcc->width, outputVideoAvcc->height, outputVideoPixelFormat,
-                                    SWS_BICUBIC,
-                                    nullptr, nullptr, nullptr);
-}
-
-int RecordingService::prepare_audio_converter() {
-    //int inputChannelLayout = av_get_default_channel_layout(inputAudioAvcc->channels);
-    audioConverter = swr_alloc_set_opts(nullptr,
-                                        outputAudioAvcc->channel_layout,
-                                        outputAudioSampleFormat,  // aac encoder only receive this format
-                                        outputAudioAvcc->sample_rate,
-                                        inputAudioAvcc->channel_layout,
-                                        inputAudioAvcc->sample_fmt,
-                                        inputAudioAvcc->sample_rate,
-                                        0, nullptr);
-
-    swr_init(audioConverter);
-
-    // 2 seconds FIFO buffer
-    audioBuffer = av_audio_fifo_alloc(outputAudioSampleFormat, inputAudioAvcc->channels,
-                                      outputAudioAvcc->sample_rate * 3);
-    return 0;
-}
-
-int RecordingService::prepare_audio_encoder() {
-    AVRational input_framerate = av_guess_frame_rate(inputAvfc, inputVideoAvs, nullptr);
-    outputAudioAvs = avformat_new_stream(outputAvfc, nullptr);
-
-    if (!outputAudioAvs) {
-        //Handle err alloc stream
-        std::cout << "error allocating encoder audio AVStream" << std::endl;
-        return -1;
-    }
-    outputAudioAvc = avcodec_find_encoder_by_name("aac");
-
-    if (!outputAudioAvc) {
-        //Handle encoder not found
-        std::cout << "error encoder audio not found" << std::endl;
-        return -1;
-    }
-
-    outputAudioAvcc = avcodec_alloc_context3(outputAudioAvc);
-    if (!outputAudioAvcc) {
-        //Handle err alloc context
-        std::cout << "error allocating encoder audio AVCodecContext" << std::endl;
-        return -1;
-    }
-
-    outputAudioAvcc->channels = inputAudioAvcc->channels;
-    outputAudioAvcc->channel_layout = av_get_default_channel_layout(inputAudioAvcc->channels);
-    outputAudioAvcc->sample_rate = inputAudioAvcc->sample_rate;
-    outputAudioAvcc->sample_fmt = outputAudioSampleFormat;
-    outputAudioAvcc->bit_rate = 96000;
-    outputAudioAvcc->time_base = {1, 44100};
-
-    outputAudioAvcc->strict_std_compliance = FF_COMPLIANCE_EXPERIMENTAL;
-
-
-    if (avcodec_open2(outputAudioAvcc, outputAudioAvc, nullptr) < 0) {
-        //Handle
-        std::cout << "error opening enconder audio codec" << std::endl;
-        return -1;
-    }
-    if (avcodec_parameters_from_context(outputAudioAvs->codecpar, outputAudioAvcc)) {
-        //Handle
-        std::cout << "error copying encoder audio stream parameters to codec context" << std::endl;
-        return -1;
-    }
-    outputAudioAvs->time_base = {1, 1000};
-
-    return 0;
-}
-
-int64_t last_encoded_dts = -1;
-
-int RecordingService::convert_video(AVFrame *videoInputFrame, AVFrame *videoOutputFrame) {
-    //AVFrame *outputFrame = av_frame_alloc();
-    av_image_alloc(videoOutputFrame->data, videoOutputFrame->linesize, outputVideoAvcc->width, outputVideoAvcc->height,
-                   outputVideoPixelFormat, 0);
-    av_image_fill_arrays(videoOutputFrame->data, videoOutputFrame->linesize, nullptr, outputVideoPixelFormat, outputVideoAvcc->width,
-                         outputVideoAvcc->height, 0);
-
-    if (sws_scale_frame(videoConverter, videoOutputFrame, videoInputFrame) < 0) {
-        throw std::runtime_error("failed converting video frame");
-    }
-    return 0;
-}
-
-int RecordingService::encode_video(int64_t framePts, AVFrame *videoInputFrame) {
-    if (videoInputFrame) videoInputFrame->pict_type = AV_PICTURE_TYPE_NONE;
-
-    AVPacket *output_packet = av_packet_alloc();
-    if (!output_packet) {
-        //Handle
-        std::cout << "error allocating output AVPacket" << std::endl;
-        return -1;
-    }
-
-    if (videoInputFrame != nullptr) {
-        videoInputFrame->pts = av_rescale_q(framePts, {1, 1000}, outputVideoAvcc->time_base);
-    }
-
-    int response = avcodec_send_frame(outputVideoAvcc, videoInputFrame);
-
-    while (response >= 0) {
-        response = avcodec_receive_packet(outputVideoAvcc, output_packet);
-        if (response == AVERROR(EAGAIN) || response == AVERROR_EOF) {
-            //std::cout << "eagain" << std::endl;
-            break;
-        } else if (response < 0) {
-            //Handle
-            std::cout << "error receiving packet from video encoder" << std::endl;
-            return -1;
-        }
-
-        output_packet->stream_index = inputVideoIndex;
-
-        av_packet_rescale_ts(output_packet, outputVideoAvcc->time_base, outputVideoAvs->time_base);
-
-        if (output_packet->dts == last_encoded_dts) {
-            continue;
-        }
-        last_encoded_dts = output_packet->dts;
-        //std::cout << "write video dts" << output_packet->dts << std::endl;
-        response = av_write_frame(outputAvfc, output_packet);
-        if (response != 0) {
-            //Handle
-            std::cout << "error writing output frame" << std::endl;
-            return -1;
-        }
-    }
-    av_packet_unref(output_packet);
-    av_packet_free(&output_packet);
-    return 0;
-}
-
-
-int RecordingService::transcode_video(AVPacket *videoInputPacket, int64_t packetPts) {
-    AVFrame *videoInputFrame = av_frame_alloc();
-    if (videoInputFrame == nullptr) {
-        //Handle
-        return -1;
-    }
-
-    int response = avcodec_send_packet(inputVideoAvcc, videoInputPacket);
-    if (response < 0) {
-        std::cout << "Error while sending packet to video decoder: " << av_err2str(response) << std::endl;
-        return -1;
-    }
-
-    while (response >= 0) {
-        response = avcodec_receive_frame(inputVideoAvcc, videoInputFrame);
-        if (response == AVERROR(EAGAIN) || response == AVERROR_EOF) {
-            break;
-        } else if (response < 0) {
-            std::cout << "error receiving packet from video decoder" << std::endl;
-            return -1;
-        }
-
-        if (response >= 0) {
-            AVFrame *convertedFrame = av_frame_alloc();
-            if (convert_video(videoInputFrame, convertedFrame) < 0) {
-                throw std::runtime_error("Error converting video frame");
-            }
-            if (encode_video(packetPts, convertedFrame)) {
-                throw std::runtime_error("Error converting audio frame");
-
-            }
-        }
-        av_frame_unref(videoInputFrame);
-    }
-    av_packet_unref(videoInputPacket);
-    av_packet_free(&videoInputPacket);
-    av_frame_free(&videoInputFrame);
-    return 0;
-}
-
-int RecordingService::convert_audio(AVFrame *audioInputFrame) {
-    uint8_t **audioData;
-    int ret = av_samples_alloc_array_and_samples(&audioData, nullptr, outputAudioAvcc->channels,
-                                                 audioInputFrame->nb_samples, outputAudioSampleFormat, 0);
-    if (ret < 0) {
-        throw std::runtime_error("Fail to alloc samples by av_samples_alloc_array_and_samples.");
-    }
-
-    ret = swr_convert(audioConverter, audioData, audioInputFrame->nb_samples,
-                      (const uint8_t **) (audioInputFrame->extended_data),
-                      audioInputFrame->nb_samples);
-    if (ret < 0) {
-        throw std::runtime_error("Fail to swr_convert.");
-    }
-
-    if (av_audio_fifo_space(audioBuffer) < audioInputFrame->nb_samples)
-        throw std::runtime_error("audio buffer is too small.");
-
-    ret = av_audio_fifo_write(audioBuffer, (void **) audioData, audioInputFrame->nb_samples);
-    if (ret < 0) {
-        throw std::runtime_error("Fail to write fifo");
-    }
-
-    av_freep(&audioData[0]);
-    return 0;
-}
-
-
-int RecordingService::encode_audio_from_buffer(int64_t framePts, bool shouldFlush) {
-
-    AVPacket *output_packet = av_packet_alloc();
-    if (!output_packet) {
-        std::cout << "could not allocate memory for output packet" << std::endl;
-        return -1;
-    }
-
-    while (av_audio_fifo_size(audioBuffer) >= outputAudioAvcc->frame_size) {
-        AVFrame *outputFrame = nullptr;
-
-        if (!shouldFlush) {
-            // Build frame from buffer
-            outputFrame = av_frame_alloc();
-            if (outputFrame == nullptr) {
-                throw std::runtime_error("Error allocating new frame");
-            }
-            outputFrame->nb_samples = outputAudioAvcc->frame_size;
-            outputFrame->channels = outputAudioAvcc->channels;
-            outputFrame->channel_layout = outputAudioAvcc->channel_layout;
-            outputFrame->format = outputAudioSampleFormat;
-            outputFrame->sample_rate = outputAudioAvcc->sample_rate;
-
-            outputFrame->pts = framePts;
-
-            if (av_frame_get_buffer(outputFrame, 0) < 0) {
-                throw std::runtime_error("Error reading from audio buffer");
-            }
-
-            if (av_audio_fifo_read(audioBuffer, (void **) outputFrame->data, outputAudioAvcc->frame_size) < 0) {
-                throw std::runtime_error("Error reading from audio buffer");
-            }
-        }
-
-        int response = avcodec_send_frame(outputAudioAvcc, outputFrame);
-
-        while (response >= 0) {
-            response = avcodec_receive_packet(outputAudioAvcc, output_packet);
-            if (response == AVERROR(EAGAIN) || response == AVERROR_EOF) {
-                break;
-            } else if (response < 0) {
-                std::cout << "Error while receiving packet from encoder: " << std::endl;
-                return -1;
-            }
-
-            output_packet->stream_index = inputAudioIndex;
-            //std::cout << "write audio dts" << output_packet->pts << std::endl;
-            response = av_interleaved_write_frame(outputAvfc, output_packet);
-            if (response != 0) {
-                std::cout << "Error " << response << " while receiving packet from decoder: " << std::endl;
-                return -1;
-            }
-        }
-
-        av_packet_unref(output_packet);
-        if (shouldFlush) {
-            av_packet_free(&output_packet);
-            return 0;
-        }
-    }
-    av_packet_free(&output_packet);
-
-    return 0;
-}
-
-int RecordingService::transcode_audio(AVPacket *audioInputPacket, int64_t packetPts) {
-    AVFrame *audioInputFrame = av_frame_alloc();
-    if (audioInputFrame == nullptr) {
-        //Handle
-        return -1;
-    }
-
-    int response = avcodec_send_packet(inputAudioAvcc, audioInputPacket);
-    if (response < 0) {
-        std::cout << "Error while sending packet to decoder: " << av_err2str(response) << std::endl;
-        return response;
-    }
-
-    while (response >= 0) {
-        response = avcodec_receive_frame(inputAudioAvcc, audioInputFrame);
-        if (response == AVERROR(EAGAIN) || response == AVERROR_EOF) {
-            break;
-        } else if (response < 0) {
-            std::cout << "Error while receiving frame from input: " << std::endl;
-            return response;
-        }
-
-        if (response >= 0) {
-            if (convert_audio(audioInputFrame) < 0) {
-                throw std::runtime_error("Error converting audio frame");
-            }
-
-            if (encode_audio_from_buffer(packetPts, false) < 0) {
-                throw std::runtime_error("Error converting audio frame");
-            }
-        }
-        av_frame_unref(audioInputFrame);
-    }
-    av_packet_unref(audioInputPacket);
-    av_packet_free(&audioInputPacket);
-    av_frame_free(&audioInputFrame);
-    return 0;
-}
-
-int
-RecordingService::start_capture_loop() {
-    // if inputAuxCtx == nullptr
-    //  -> read frame from device (loop not blocked)
-    //  -> open video thread
-    //      -> transcode frame
-    //      -> write interleaved frame
-    //  -> open audio thread
-    //      -> transcode frame
-    //      -> write interleaved frame
-    // -> else
-    //  -> open video thread
-    //      -> read frame from device
-    //      -> transcode frame
-    //      -> write interleaved frame
-    //  -> open audio thread
-    //      -> read frame from device
-    //      -> transcode frame
-    //      -> write interleaved frame
-
+int RecordingService::start_capture_loop() {
     AVPacket *inputPacket = av_packet_alloc();
     if (!inputPacket) {
         //Handle
@@ -660,83 +179,68 @@ int RecordingService::stop_recording() {
 }
 
 /// Initializes all the structures needed for the recording process.
-/// Accepts device IDs as input in the following format:
-/// - MacOS
-///     videoInDevID:"avfoundation:1"
-///     audioInDevID:"avfoundation:1"
-/// - Linux
-///     videoInDevID:"x11grab:...."
-///     audioInDevID:"pulse:....."
-/// - Windows
-///     videoInDevID:"dshow:...."
-///     audioInDevID:"dshow:...."
-RecordingService::RecordingService(const std::string &videoInDevID, const std::string &audioInDevID,
+/// Accepts deviceAddresses as input in the following format:
+///   deviceAddress: "{deviceID}:{url}"
+///
+/// Examples:
+///   - MacOS
+///       videoAddress:"avfoundation:1"
+///       audioAddress:"avfoundation:1"
+///   - Linux
+///       videoAddress:"x11grab:...."
+///       audioAddress:"pulse:....."
+///   - Windows
+///       videoAddress:"dshow:...."
+///       audioAddress:"dshow:...."
+RecordingService::RecordingService(const std::string &videoAddress, const std::string &audioAddress,
                                    const std::string &outputFilename) {
-
-    // Split input devices ID
-    // If audio and video deviceID is equal
-    //  -> call open_input_device(deviceID, videoID, audioID)
-    //  -> get input streamID for audio and video
-    //  -> call open_input_stream_decoder for audio and video
-    //  -> build single InputStreamingContext
-    // Else
-    //  -> call open_input_device(deviceID, videoID, nullptr) and open_input_device(deviceID, nullptr, audioID)
-    //  -> get input streamID for audio and video
-    //  -> call open_input_stream_decoder for audio and video
-    //  -> build double InputStreamingContext
+    // Initialize the LibAV devices
     avdevice_register_all();
 
-    int delimiterIndex = videoInDevID.find(':');
-    std::string videoDeviceID = videoInDevID.substr(0, delimiterIndex);
-    std::string videoURL = videoInDevID.substr(delimiterIndex + 1, videoInDevID.length());
+    // Unpack device addresses
+    std::string videoDeviceID, videoURL, audioDeviceID, audioURL;
+    std::tie(videoDeviceID, videoURL) = unpackDeviceAddress(videoAddress);
+    std::tie(audioDeviceID, audioURL) = unpackDeviceAddress(audioAddress);
 
-    delimiterIndex = audioInDevID.find(':');
-    std::string audioDeviceID = audioInDevID.substr(0, delimiterIndex);
-    std::string audioURL = audioInDevID.substr(delimiterIndex + 1, audioInDevID.length());
-
+    // Open A/V devices
     if (videoDeviceID == audioDeviceID) {
-        // Open A/V device
-        inputAvfc = open_input_device(videoDeviceID, videoURL, audioURL);
-
-        // Get video stream
-        inputVideoIndex = av_find_best_stream(inputAvfc, AVMEDIA_TYPE_VIDEO, -1, -1, &inputVideoAvc, 0);
-        if (inputVideoIndex < 0) {
-            //Handle negative index
-            std::cout << "error finding video input stream" << std::endl;
-            exit(1);
-        }
-        inputVideoAvs = inputAvfc->streams[inputVideoIndex];
-
-        // Open video decoder
-        open_input_stream_decoder(inputVideoAvs, &inputVideoAvc, &inputVideoAvcc);
-
-        // Get audio stream
-        inputAudioIndex = av_find_best_stream(inputAvfc, AVMEDIA_TYPE_AUDIO, -1, -1, &inputAudioAvc, 0);
-        if (inputAudioIndex < 0) {
-            //Handle negative index
-            std::cout << "error finding audio input stream" << std::endl;
-            exit(1);
-        }
-        inputAudioAvs = inputAvfc->streams[inputAudioIndex];
-
-        // Open audio decoder
-        open_input_stream_decoder(inputAudioAvs, &inputAudioAvc, &inputAudioAvcc);
-        std::cout << "maybe" << std::endl;
-
+        inputAvfc = init_input_device(videoDeviceID, videoURL, audioURL, get_device_options(videoDeviceID));
+        inputAuxAvfc = nullptr;
     } else {
-
+        inputAvfc = init_input_device(videoDeviceID, videoURL, "", get_device_options(videoDeviceID));
+        inputAuxAvfc = init_input_device(audioDeviceID, "", audioURL, get_device_options(audioDeviceID));
     }
 
-    // Call open_output_file
-    outputAvfc = open_output_file(outputFilename);
+    // Get video stream
+    init_video_input_stream(inputAvfc, &inputVideoAvs, &inputVideoAvc);
 
-    // Set class attributes
-    prepare_video_encoder();
-    prepare_video_converter();
-    prepare_audio_encoder();
-    prepare_audio_converter();
+    // Open video decoder
+    init_input_stream_decoder(inputVideoAvs, &inputVideoAvc, &inputVideoAvcc);
 
-    this->inputAuxAvfc = nullptr;
+    // Get audio stream
+    if (videoDeviceID == audioDeviceID) {
+        init_audio_input_stream(inputAvfc, &inputAudioAvs, &inputAudioAvc);
+    } else {
+        init_audio_input_stream(inputAuxAvfc, &inputAudioAvs, &inputAudioAvc);
+    }
+
+    // Open audio decoder
+    init_input_stream_decoder(inputAudioAvs, &inputAudioAvc, &inputAudioAvcc);
+
+    // Open output file
+    outputAvfc = init_output_context_and_file(outputFilename);
+
+    // Initialize output streams
+    init_output_stream(outputAvfc, &outputVideoAvs);
+    init_output_stream(outputAvfc, &outputAudioAvs);
+
+    // Initialize output encoders
+    init_video_encoder(inputAvfc, inputVideoAvs, outputVideoAvs, &outputVideoAvc, &outputVideoAvcc);
+    init_audio_encoder(inputAudioAvcc, outputAudioAvs, &outputAudioAvc, &outputAudioAvcc);
+
+    // Initialize output converters
+    init_video_converter(inputVideoAvcc, outputVideoAvcc, &videoConverter);
+    init_audio_converter(inputAudioAvcc, outputAudioAvcc, &audioConverter, &audioConverterBuffer);
 
     // Initialize signal to stop recording on sigterm
     std::signal(SIGTERM, [](int) {

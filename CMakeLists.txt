@@ -25,7 +25,10 @@ add_executable(pds_screen_recording
         src/device_service/device_service.h
         src/recording_service/recording_service.cpp
         src/recording_service/recording_service.h
-        ${FILES} )
+        src/recording_service/recording_init.cpp
+        src/recording_service/recording_utils.cpp
+        src/recording_service/recording_transcode.cpp
+        ${FILES})
 
 
 target_link_libraries(pds_screen_recording avdevice)
@@ -34,8 +37,9 @@ target_link_libraries(pds_screen_recording avutil)
 target_link_libraries(pds_screen_recording avcodec)
 target_link_libraries(pds_screen_recording swresample)
 target_link_libraries(pds_screen_recording swscale)
+target_link_libraries(pds_screen_recording fmt)
 
-if(${APPLE})
+if (${APPLE})
     target_link_libraries(pds_screen_recording
             "-framework AVFoundation"
             "-framework CoreGraphics"
@@ -44,7 +48,7 @@ if(${APPLE})
             "-framework MediaPlayer"
             "-framework QuartzCore"
             )
-elseif(${UNIX})
+elseif (${UNIX})
     target_link_libraries(pds_screen_recording X11)
     target_link_libraries(pds_screen_recording Xrandr)
-endif()
+endif ()
