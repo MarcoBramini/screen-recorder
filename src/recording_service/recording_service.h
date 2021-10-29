@@ -159,6 +159,10 @@ public:
     int resume_recording();
 
     int stop_recording();
+
+    void enqueue_video_packet(AVPacket *inputVideoPacket);
+
+    void enqueue_audio_packet(AVPacket *inputAudioPacket);
 };
 
 

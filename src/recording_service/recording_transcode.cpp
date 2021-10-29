@@ -20,8 +20,6 @@ int RecordingService::convert_video(AVFrame *videoInputFrame, AVFrame *videoOutp
 int64_t last_encoded_dts = -1;
 
 int RecordingService::encode_video(int64_t framePts, AVFrame *videoInputFrame) {
-    if (videoInputFrame) videoInputFrame->pict_type = AV_PICTURE_TYPE_NONE;
-
     AVPacket *output_packet = av_packet_alloc();
     if (!output_packet) {
         //Handle
@@ -30,6 +28,7 @@ int RecordingService::encode_video(int64_t framePts, AVFrame *videoInputFrame) {
     }
 
     if (videoInputFrame != nullptr) {
+        videoInputFrame->pict_type = AV_PICTURE_TYPE_NONE;
         videoInputFrame->pts = av_rescale_q(framePts, {1, 1000}, outputVideoAvcc->time_base);
     }
 

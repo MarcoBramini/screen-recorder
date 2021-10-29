@@ -7,6 +7,41 @@
 static bool mustTerminateSignal = false;
 static bool mustTerminateStop = false;
 
+bool readAux = false;
+
+/// Read a new packet from the input device(s) in Round Robin fashion.
+/// If the device is the same for audio and video, it reads from the same context for both audio and video.
+/// Returns 0 on success or the AVERROR, returned by the av_read_frame function, on failure.
+int read_next_frame(AVFormatContext *inputAvfc, AVFormatContext *inputAuxAvfc, AVPacket *inputPacket) {
+    // Select the device context to use
+    AVFormatContext *currentCtx = (!readAux) ? inputAvfc : inputAuxAvfc;
+
+    // Read next frame and fill the return packet
+    int ret = av_read_frame(currentCtx, inputPacket);
+    if (ret < 0) {
+        return ret;
+    }
+    return 0;
+}
+
+int64_t last_video_pts = 0;
+
+void RecordingService::enqueue_video_packet(AVPacket *inputVideoPacket) {
+    auto videoPacket = av_packet_clone(inputVideoPacket);
+    videoPacketsQueue.push(std::make_tuple(videoPacket, last_video_pts));
+    last_video_pts += (int) (1000 / 30);
+}
+
+int64_t last_audio_pts = 0;
+
+void RecordingService::enqueue_audio_packet(AVPacket *inputAudioPacket) {
+    int64_t frameDuration = av_get_audio_frame_duration(outputAudioAvcc, outputAudioAvcc->frame_size);
+
+    auto audioPacket = av_packet_clone(inputAudioPacket);
+    audioPacketsQueue.push(std::make_tuple(audioPacket, last_audio_pts));
+    last_audio_pts += frameDuration / 2;
+}
+
 int RecordingService::start_capture_loop() {
     AVPacket *inputPacket = av_packet_alloc();
     if (!inputPacket) {
@@ -14,37 +49,28 @@ int RecordingService::start_capture_loop() {
         return -1;
     }
 
-    int64_t last_video_pts = 0;
-    int64_t last_audio_pts = 0;
-    int64_t frameDuration = av_get_audio_frame_duration(outputAudioAvcc, outputAudioAvcc->frame_size);
 
-    if (inputAuxAvfc == nullptr) {
-        while (true) {
-            int res = av_read_frame(inputAvfc, inputPacket);
-            if (res == AVERROR(EAGAIN))
-                continue;
+    while (true) {
+        int res = read_next_frame(inputAvfc, inputAuxAvfc, inputPacket);
+        if (res == AVERROR(EAGAIN))
+            continue;
 
-            if (res < 0) {
-                std::string error = "Capture failed with:";
-                error.append(av_err2str(res));
-                throw std::runtime_error(error);
-            }
+        if (res < 0) {
+            std::string error = "Capture failed with:";
+            error.append(av_err2str(res));
+            throw std::runtime_error(error);
+        }
 
-            if (inputAvfc->streams[inputPacket->stream_index]->codecpar->codec_type ==
-                AVMEDIA_TYPE_VIDEO) {
-                auto videoPacket = av_packet_clone(inputPacket);
-                videoPacketsQueue.push(std::make_tuple(videoPacket, last_video_pts));
-                last_video_pts += (int) (1000 / 30);
-            } else if (inputAvfc->streams[inputPacket->stream_index]->codecpar->codec_type ==
-                       AVMEDIA_TYPE_AUDIO) {
-                auto audioPacket = av_packet_clone(inputPacket);
-                audioPacketsQueue.push(std::make_tuple(audioPacket, last_audio_pts));
-                last_audio_pts += frameDuration / 2;
-            }
+        if (inputAvfc->streams[inputPacket->stream_index]->codecpar->codec_type ==
+            AVMEDIA_TYPE_VIDEO) {
+            enqueue_video_packet(inputPacket);
+        } else if (inputAuxAvfc->streams[inputPacket->stream_index]->codecpar->codec_type ==
+                   AVMEDIA_TYPE_AUDIO) {
+            enqueue_audio_packet(inputPacket);
+        }
 
-            if (mustTerminateSignal || mustTerminateStop) {
-                break;
-            }
+        if (mustTerminateSignal || mustTerminateStop) {
+            break;
         }
     }
 
@@ -205,7 +231,7 @@ RecordingService::RecordingService(const std::string &videoAddress, const std::s
     // Open A/V devices
     if (videoDeviceID == audioDeviceID) {
         inputAvfc = init_input_device(videoDeviceID, videoURL, audioURL, get_device_options(videoDeviceID));
-        inputAuxAvfc = nullptr;
+        inputAuxAvfc = inputAvfc; // The auxiliary device context is the same because we only use one device for A/V
     } else {
         inputAvfc = init_input_device(videoDeviceID, videoURL, "", get_device_options(videoDeviceID));
         inputAuxAvfc = init_input_device(audioDeviceID, "", audioURL, get_device_options(audioDeviceID));
@@ -218,11 +244,7 @@ RecordingService::RecordingService(const std::string &videoAddress, const std::s
     init_input_stream_decoder(inputVideoAvs, &inputVideoAvc, &inputVideoAvcc);
 
     // Get audio stream
-    if (videoDeviceID == audioDeviceID) {
-        init_audio_input_stream(inputAvfc, &inputAudioAvs, &inputAudioAvc);
-    } else {
-        init_audio_input_stream(inputAuxAvfc, &inputAudioAvs, &inputAudioAvc);
-    }
+    init_audio_input_stream(inputAuxAvfc, &inputAudioAvs, &inputAudioAvc);
 
     // Open audio decoder
     init_input_stream_decoder(inputAudioAvs, &inputAudioAvc, &inputAudioAvcc);
