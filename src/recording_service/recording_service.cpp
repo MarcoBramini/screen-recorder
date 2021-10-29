@@ -89,8 +89,12 @@ int RecordingService::start_capture_loop() {
 }
 
 int RecordingService::process_video_queue() {
-    while (!mustTerminateStop && !mustTerminateSignal) {
-        if (videoPacketsQueue.empty()) continue;
+    while (true) {
+        if (videoPacketsQueue.empty()) {
+            if (!mustTerminateStop && !mustTerminateSignal)
+                continue;
+            break;
+        };
 
         AVPacket *videoPacket;
         int64_t packetPts;
@@ -106,9 +110,12 @@ int RecordingService::process_video_queue() {
     return 0;
 }
 
-int RecordingService::process_audio_queue() {
+void RecordingService::rec_stats_loop(){
     while (!mustTerminateStop && !mustTerminateSignal) {
-        if (audioPacketsQueue.empty()) continue;
+        std::cout << "\r Packet Queues - video: " << videoPacketsQueue.size() << " audio: " << audioPacketsQueue.size();
+    }
+}
+
 
         AVPacket *audioPacket;
         int64_t packetPts;
@@ -163,20 +170,14 @@ int RecordingService::resume_recording() {
 }
 
 int RecordingService::stop_recording() {
-    // Stop recording loop thread (set cond var stopRecording to true)
-    // Flush encoders
-    // Write output file trailer
-    // Free res (?)
     mustTerminateStop = true;
 
     if (captureThread.joinable())
         captureThread.join();
 
-    //while (!videoPacketsQueue.empty()) {}
     if (videoProcessThread.joinable())
         videoProcessThread.join();
 
-    //while (!audioPacketsQueue.empty()) {}
     if (audioProcessThread.joinable())
         audioProcessThread.join();
 

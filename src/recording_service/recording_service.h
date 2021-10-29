@@ -34,6 +34,7 @@ class RecordingService {
     std::thread captureThread;
     std::thread audioProcessThread;
     std::thread videoProcessThread;
+    std::thread recStatsThread;
 
     // -----------------
     // Processing queues
@@ -165,6 +166,8 @@ public:
     void enqueue_video_packet(AVPacket *inputVideoPacket);
 
     void enqueue_audio_packet(AVPacket *inputAudioPacket);
+
+    void rec_stats_loop();
 };
 
 
