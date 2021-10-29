@@ -56,7 +56,7 @@ std::vector<InputDeviceAudio> DeviceService::get_input_audio_devices() {
     }
 
     for (int i = 0; i < l->nb_devices; i++) {
-        InputDeviceAudio deviceAudio(l->devices[i]->device_name, l->devices[i]->device_description);
+        InputDeviceAudio deviceAudio(l->devices[i]->device_name, DEVICE_ID_PULSE, l->devices[i]->device_description);
         devices.push_back(deviceAudio);
     }
     avdevice_free_list_devices(&l);
