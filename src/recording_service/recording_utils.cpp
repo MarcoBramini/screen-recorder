@@ -9,13 +9,12 @@ std::map<std::string, std::string> RecordingService::get_device_options(const st
     }
 
     if (deviceID == "x11grab") {
-        return {{"framerate",      "30"},
-                {"capture_cursor", "true"}};
+        return {{"framerate",      "25"},
+                {"video_size", "1000x500"}};
     }
 
     if (deviceID == "pulse") {
-        return {{"framerate",      "30"},
-                {"capture_cursor", "true"}};
+        return {};
     }
 
     return {};
@@ -41,4 +40,9 @@ std::tuple<std::string, std::string> RecordingService::unpackDeviceAddress(const
     std::string url = deviceAddress.substr(delimiterIndex + 1, deviceAddress.length());
 
     return std::make_tuple(deviceID, url);
+}
+
+std::string RecordingService::unpackAVError(int avErrorCode){
+    char a[AV_ERROR_MAX_STRING_SIZE] = { 0 };
+    return av_make_error_string(a, AV_ERROR_MAX_STRING_SIZE, avErrorCode);
 }

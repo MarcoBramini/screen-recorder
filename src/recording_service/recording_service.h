@@ -51,12 +51,12 @@ class RecordingService {
     AVFormatContext *inputAuxAvfc;
 
     // Input video properties
-    const AVCodec *inputVideoAvc;
+    AVCodec *inputVideoAvc;
     AVStream *inputVideoAvs;
     AVCodecContext *inputVideoAvcc;
 
     // Input audio properties
-    const AVCodec *inputAudioAvc;
+    AVCodec *inputAudioAvc;
     AVStream *inputAudioAvs;
     AVCodecContext *inputAudioAvcc;
 
@@ -97,19 +97,21 @@ class RecordingService {
 
     static std::tuple<std::string, std::string> unpackDeviceAddress(const std::string &deviceAddress);
 
+    static std::string unpackAVError(int avErrorCode);
+
     // recording_init.cpp
     static AVFormatContext *
     init_input_device(const std::string &deviceID, const std::string &videoURL, const std::string &audioURL,
-                      const std::__1::map<std::string, std::string> &optionsMap);
+                      const std::map<std::string, std::string> &optionsMap);
 
     static void
-    init_video_input_stream(AVFormatContext *inputAvfc, AVStream **inputVideoAvs, const AVCodec **inputVideoAvc);
+    init_video_input_stream(AVFormatContext *inputAvfc, AVStream **inputVideoAvs, AVCodec **inputVideoAvc);
 
     static void
-    init_audio_input_stream(AVFormatContext *inputAvfc, AVStream **inputAudioAvs, const AVCodec **inputAudioAvc);
+    init_audio_input_stream(AVFormatContext *inputAvfc, AVStream **inputAudioAvs, AVCodec **inputAudioAvc);
 
     static void
-    init_input_stream_decoder(AVStream *inputAvs, const AVCodec **inputAvc, AVCodecContext **inputAvcc);
+    init_input_stream_decoder(AVStream *inputAvs, AVCodec **inputAvc, AVCodecContext **inputAvcc);
 
     static AVFormatContext *init_output_context_and_file(const std::string &outputFileName);
 

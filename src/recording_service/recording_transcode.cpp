@@ -5,19 +5,19 @@ extern "C" {
 }
 
 int RecordingService::convert_video(AVFrame *videoInputFrame, AVFrame *videoOutputFrame) {
-    av_image_alloc(videoOutputFrame->data, videoOutputFrame->linesize, outputVideoAvcc->width, outputVideoAvcc->height,
-                   OUTPUT_VIDEO_PIXEL_FMT, 0);
-    av_image_fill_arrays(videoOutputFrame->data, videoOutputFrame->linesize, nullptr, OUTPUT_VIDEO_PIXEL_FMT,
-                         outputVideoAvcc->width,
-                         outputVideoAvcc->height, 0);
+    videoOutputFrame->format = OUTPUT_VIDEO_PIXEL_FMT;
+    videoOutputFrame->width = outputVideoAvcc->width;
+    videoOutputFrame->height = outputVideoAvcc->height;
+    av_frame_get_buffer(videoOutputFrame,0);
 
-    if (sws_scale_frame(videoConverter, videoOutputFrame, videoInputFrame) < 0) {
+    if (sws_scale(videoConverter, videoInputFrame->data, videoInputFrame->linesize, 0, videoInputFrame->height,
+                  videoOutputFrame->data, videoOutputFrame->linesize) < 0) {
         throw std::runtime_error("failed converting video frame");
     }
     return 0;
 }
 
-int64_t last_encoded_dts = -1;
+int64_t last_encoded_video_dts = -1;
 
 int RecordingService::encode_video(int64_t framePts, AVFrame *videoInputFrame) {
     AVPacket *output_packet = av_packet_alloc();
@@ -49,10 +49,10 @@ int RecordingService::encode_video(int64_t framePts, AVFrame *videoInputFrame) {
 
         av_packet_rescale_ts(output_packet, outputVideoAvcc->time_base, outputVideoAvs->time_base);
 
-        if (output_packet->dts == last_encoded_dts) {
+        if (output_packet->dts == last_encoded_video_dts) {
             continue;
         }
-        last_encoded_dts = output_packet->dts;
+        last_encoded_video_dts = output_packet->dts;
         //std::cout << "write video dts" << output_packet->dts << std::endl;
         response = av_interleaved_write_frame(outputAvfc, output_packet);
         if (response != 0) {
@@ -75,7 +75,7 @@ int RecordingService::transcode_video(AVPacket *videoInputPacket, int64_t packet
 
     int response = avcodec_send_packet(inputVideoAvcc, videoInputPacket);
     if (response < 0) {
-        std::cout << "Error while sending packet to video decoder: " << av_err2str(response) << std::endl;
+        std::cout << "Error while sending packet to video decoder: " << unpackAVError(response) << std::endl;
         return -1;
     }
 
@@ -133,6 +133,7 @@ int RecordingService::convert_audio(AVFrame *audioInputFrame) {
     return 0;
 }
 
+int64_t last_encoded_audio_dts = -1;
 int RecordingService::encode_audio_from_buffer(int64_t framePts, bool shouldFlush) {
 
     AVPacket *output_packet = av_packet_alloc();
@@ -180,6 +181,11 @@ int RecordingService::encode_audio_from_buffer(int64_t framePts, bool shouldFlus
             }
 
             output_packet->stream_index = outputAudioAvs->index;
+
+            if (output_packet->dts == last_encoded_audio_dts) {
+                continue;
+            }
+            last_encoded_audio_dts = output_packet->dts;
             //std::cout << "write audio dts" << output_packet->pts << std::endl;
             response = av_interleaved_write_frame(outputAvfc, output_packet);
             if (response != 0) {
@@ -208,7 +214,7 @@ int RecordingService::transcode_audio(AVPacket *audioInputPacket, int64_t packet
 
     int response = avcodec_send_packet(inputAudioAvcc, audioInputPacket);
     if (response < 0) {
-        std::cout << "Error while sending packet to decoder: " << av_err2str(response) << std::endl;
+        std::cout << "Error while sending packet to decoder: " << unpackAVError(response) << std::endl;
         return response;
     }
 

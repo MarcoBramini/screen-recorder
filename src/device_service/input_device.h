@@ -7,6 +7,7 @@
 
 #include <utility>
 #include <iostream>
+#include <fmt/core.h>
 
 class InputDevice {
     std::string id;
@@ -19,7 +20,7 @@ public:
 
     std::string getName() { return this->name; };
 
-    void toString() { std::cout << "ID: " << this->id << " Name: " << this->name << std::endl; };
+    std::string toString() { return fmt::format("ID: {} Name: {}",this->id,this->name);};
 };
 
 

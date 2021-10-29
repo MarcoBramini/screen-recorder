@@ -7,21 +7,22 @@
 static bool mustTerminateSignal = false;
 static bool mustTerminateStop = false;
 
-bool readAux = false;
+bool readAux = true;
 
 /// Read a new packet from the input device(s) in Round Robin fashion.
 /// If the device is the same for audio and video, it reads from the same context for both audio and video.
-/// Returns 0 on success or the AVERROR, returned by the av_read_frame function, on failure.
+/// On success, it returns 0 (inputAvfc) or 1 (inputAuxAvfc) depending on the device the packet come from.
+/// Returns the AVERROR, returned by the av_read_frame function, on failure.
 int read_next_frame(AVFormatContext *inputAvfc, AVFormatContext *inputAuxAvfc, AVPacket *inputPacket) {
+    readAux = !readAux;
     // Select the device context to use
     AVFormatContext *currentCtx = (!readAux) ? inputAvfc : inputAuxAvfc;
-
     // Read next frame and fill the return packet
     int ret = av_read_frame(currentCtx, inputPacket);
     if (ret < 0) {
         return ret;
     }
-    return 0;
+    return readAux;
 }
 
 int64_t last_video_pts = 0;
@@ -57,16 +58,18 @@ int RecordingService::start_capture_loop() {
 
         if (res < 0) {
             std::string error = "Capture failed with:";
-            error.append(av_err2str(res));
+            error.append(unpackAVError(res));
             throw std::runtime_error(error);
         }
 
-        if (inputAvfc->streams[inputPacket->stream_index]->codecpar->codec_type ==
-            AVMEDIA_TYPE_VIDEO) {
-            enqueue_video_packet(inputPacket);
-        } else if (inputAuxAvfc->streams[inputPacket->stream_index]->codecpar->codec_type ==
-                   AVMEDIA_TYPE_AUDIO) {
-            enqueue_audio_packet(inputPacket);
+        switch(res){
+            case 0:
+                enqueue_video_packet(inputPacket);
+                break;
+            case 1:
+                enqueue_audio_packet(inputPacket);
+
+                break;
         }
 
         if (mustTerminateSignal || mustTerminateStop) {

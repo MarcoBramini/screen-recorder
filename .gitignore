@@ -33,5 +33,11 @@
 *.out
 *.app
 
+# Build folder
 cmake-build-debug
+build
+
+# IDE stuff
+.idea
+.vscode
 

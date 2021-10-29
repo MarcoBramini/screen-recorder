@@ -1,10 +1,13 @@
-cmake_minimum_required(VERSION 3.17)
+cmake_minimum_required(VERSION 3.16.3)
 project(pds_screen_recording)
 
 set(CMAKE_CXX_STANDARD 20)
+set(THREADS_PREFER_PTHREAD_FLAG ON)
 
 include_directories("/usr/local/include")
 link_directories("/usr/local/lib")
+
+find_package(Threads REQUIRED)
 
 if (${APPLE})
     set(FILES
@@ -30,7 +33,6 @@ add_executable(pds_screen_recording
         src/recording_service/recording_transcode.cpp
         ${FILES})
 
-
 target_link_libraries(pds_screen_recording avdevice)
 target_link_libraries(pds_screen_recording avformat)
 target_link_libraries(pds_screen_recording avutil)
@@ -38,6 +40,7 @@ target_link_libraries(pds_screen_recording avcodec)
 target_link_libraries(pds_screen_recording swresample)
 target_link_libraries(pds_screen_recording swscale)
 target_link_libraries(pds_screen_recording fmt)
+target_link_libraries(pds_screen_recording pthread)
 
 if (${APPLE})
     target_link_libraries(pds_screen_recording

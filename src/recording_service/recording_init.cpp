@@ -19,7 +19,7 @@ AVFormatContext *RecordingService::init_input_device(const std::string &deviceID
     }
 
     // Find the input format associated to the deviceID
-    const AVInputFormat *inputFormat = av_find_input_format(deviceID.c_str());
+    AVInputFormat *inputFormat = av_find_input_format(deviceID.c_str());
     if (!inputFormat) {
         throw std::runtime_error(build_error_message(__FUNCTION__, methodParams,
                                                      "no AVInputFormat found for deviceID"));
@@ -32,16 +32,23 @@ AVFormatContext *RecordingService::init_input_device(const std::string &deviceID
         if (ret < 0) {
             throw std::runtime_error(build_error_message(__FUNCTION__, methodParams,
                                                          fmt::format("error setting '{}' option to value '{}' ({})",
-                                                                     option.first, option.second, av_err2str(ret))));
+                                                                     option.first, option.second, unpackAVError(ret))));
         }
     }
 
     // Open the input device
-    std::string url = videoURL + ":" + audioURL;
+    std::string url;
+    if (!videoURL.empty() && audioURL.empty()){
+        url = videoURL;
+    } else if(videoURL.empty() && !audioURL.empty()){
+        url = audioURL;
+    } else{
+        url = videoURL + ":" + audioURL;
+    }
     ret = avformat_open_input(&ctx, url.c_str(), inputFormat, &options);
     if (ret < 0) {
         throw std::runtime_error(build_error_message(__FUNCTION__, methodParams,
-                                                     fmt::format("error opening input format ({})", av_err2str(ret))));
+                                                     fmt::format("error opening input format ({})", unpackAVError(ret))));
     }
 
     // Find device's streams info
@@ -49,7 +56,7 @@ AVFormatContext *RecordingService::init_input_device(const std::string &deviceID
     ret = avformat_find_stream_info(ctx, nullptr);
     if (ret < 0) {
         throw std::runtime_error(build_error_message(__FUNCTION__, methodParams,
-                                                     fmt::format("error finding streams info ({})", av_err2str(ret))));
+                                                     fmt::format("error finding streams info ({})", unpackAVError(ret))));
     }
 
     return ctx;
@@ -57,7 +64,7 @@ AVFormatContext *RecordingService::init_input_device(const std::string &deviceID
 
 /// Finds the main video stream in the input device context and its decoder.
 void RecordingService::init_video_input_stream(AVFormatContext *inputAvfc, AVStream **inputVideoAvs,
-                                               const AVCodec **inputVideoAvc) {
+                                            AVCodec **inputVideoAvc) {
     int inputVideoIndex = av_find_best_stream(inputAvfc, AVMEDIA_TYPE_VIDEO, -1, -1, inputVideoAvc, 0);
     if (inputVideoIndex < 0) {
         throw std::runtime_error(build_error_message(__FUNCTION__, {}, "error finding main video stream"));
@@ -68,7 +75,7 @@ void RecordingService::init_video_input_stream(AVFormatContext *inputAvfc, AVStr
 
 /// Finds the main audio stream in the input device context and its decoder.
 void RecordingService::init_audio_input_stream(AVFormatContext *inputAvfc, AVStream **inputAudioAvs,
-                                               const AVCodec **inputAudioAvc) {
+                                            AVCodec **inputAudioAvc) {
     int inputAudioIndex = av_find_best_stream(inputAvfc, AVMEDIA_TYPE_AUDIO, -1, -1, inputAudioAvc, 0);
     if (inputAudioIndex < 0) {
         throw std::runtime_error(build_error_message(__FUNCTION__, {}, "error finding main audio stream"));
@@ -79,7 +86,7 @@ void RecordingService::init_audio_input_stream(AVFormatContext *inputAvfc, AVStr
 
 /// Initializes the decoder for the passed input stream.
 /// If no codec is provided, it will be searched using the stream's codecID.
-void RecordingService::init_input_stream_decoder(AVStream *inputAvs, const AVCodec **inputAvc,
+void RecordingService::init_input_stream_decoder(AVStream *inputAvs, AVCodec **inputAvc,
                                                  AVCodecContext **inputAvcc) {
     if (*inputAvc == nullptr) {
         *inputAvc = avcodec_find_decoder(inputAvs->codecpar->codec_id);
@@ -98,13 +105,13 @@ void RecordingService::init_input_stream_decoder(AVStream *inputAvs, const AVCod
     if (ret < 0) {
         throw std::runtime_error(build_error_message(__FUNCTION__, {},
                                                      fmt::format("error copying decoder parameters to the context ({})",
-                                                                 av_err2str(ret))));
+                                                                 unpackAVError(ret))));
     }
 
     ret = avcodec_open2(*inputAvcc, *inputAvc, nullptr);
     if (ret < 0) {
         throw std::runtime_error(
-                build_error_message(__FUNCTION__, {}, fmt::format("error opening decoder ({})", av_err2str(ret))));
+                build_error_message(__FUNCTION__, {}, fmt::format("error opening decoder ({})", unpackAVError(ret))));
     }
 }
 
@@ -118,7 +125,7 @@ AVFormatContext *RecordingService::init_output_context_and_file(const std::strin
     if (ret < 0) {
         throw std::runtime_error(build_error_message(__FUNCTION__, methodParams,
                                                      fmt::format("error during output AVFormatContext allocation ({})",
-                                                                 av_err2str(ret))));
+                                                                 unpackAVError(ret))));
     }
 
     if (ctx->oformat->flags & AVFMT_GLOBALHEADER)
@@ -128,7 +135,7 @@ AVFormatContext *RecordingService::init_output_context_and_file(const std::strin
         ret = avio_open(&ctx->pb, outputFileName.c_str(), AVIO_FLAG_WRITE);
         if (ret < 0) {
             throw std::runtime_error(build_error_message(__FUNCTION__, methodParams, fmt::format(
-                    "error opening AVIOContext ({})", av_err2str(ret))));
+                    "error opening AVIOContext ({})", unpackAVError(ret))));
         }
     }
 
@@ -170,7 +177,7 @@ void RecordingService::init_video_encoder(AVFormatContext *inputAvfc, AVStream *
         if (ret < 0) {
             throw std::runtime_error(build_error_message(__FUNCTION__, {}, fmt::format(
                     "error setting '{}' encoder option to value '{}' ({})",
-                    option.first, option.second, av_err2str(ret))));
+                    option.first, option.second, unpackAVError(ret))));
         }
     }
 
@@ -188,7 +195,7 @@ void RecordingService::init_video_encoder(AVFormatContext *inputAvfc, AVStream *
     ret = avcodec_open2(*outputVideoAvcc, *outputVideoAvc, nullptr);
     if (ret < 0) {
         throw std::runtime_error(
-                build_error_message(__FUNCTION__, {}, fmt::format("error opening encoder ({})", av_err2str(ret))));
+                build_error_message(__FUNCTION__, {}, fmt::format("error opening encoder ({})", unpackAVError(ret))));
     }
 
     // Copy encoder parameter to stream
@@ -196,7 +203,7 @@ void RecordingService::init_video_encoder(AVFormatContext *inputAvfc, AVStream *
     if (ret < 0) {
         throw std::runtime_error(build_error_message(__FUNCTION__, {},
                                                      fmt::format("error copying encoder parameters to the stream ({})",
-                                                                 av_err2str(ret))));
+                                                                 unpackAVError(ret))));
     }
 }
 
@@ -228,7 +235,7 @@ void RecordingService::init_audio_encoder(AVCodecContext *inputAudioAvcc, AVStre
     int ret = avcodec_open2(*outputAudioAvcc, *outputAudioAvc, nullptr);
     if (ret < 0) {
         throw std::runtime_error(
-                build_error_message(__FUNCTION__, {}, fmt::format("error opening encoder ({})", av_err2str(ret))));
+                build_error_message(__FUNCTION__, {}, fmt::format("error opening encoder ({})", unpackAVError(ret))));
     }
 
     // Copy encoder parameter to stream
@@ -236,7 +243,7 @@ void RecordingService::init_audio_encoder(AVCodecContext *inputAudioAvcc, AVStre
     if (ret < 0) {
         throw std::runtime_error(build_error_message(__FUNCTION__, {},
                                                      fmt::format("error copying encoder parameters to the stream ({})",
-                                                                 av_err2str(ret))));
+                                                                 unpackAVError(ret))));
     }
 }
 
@@ -261,7 +268,7 @@ void RecordingService::init_audio_converter(AVCodecContext *inputAudioAvcc, AVCo
                                          outputAudioAvcc->channel_layout,
                                          outputAudioAvcc->sample_fmt,  // aac encoder only receive this format
                                          outputAudioAvcc->sample_rate,
-                                         inputAudioAvcc->channel_layout,
+                                         av_get_default_channel_layout(inputAudioAvcc->channels),
                                          inputAudioAvcc->sample_fmt,
                                          inputAudioAvcc->sample_rate,
                                          0, nullptr);
@@ -275,7 +282,7 @@ void RecordingService::init_audio_converter(AVCodecContext *inputAudioAvcc, AVCo
     if (ret < 0) {
         throw std::runtime_error(build_error_message(__FUNCTION__, {},
                                                      fmt::format("error initializing audio converter ({})",
-                                                                 av_err2str(ret))));
+                                                                 unpackAVError(ret))));
     }
 
     // Allocate a 2 seconds FIFO buffer for converting
