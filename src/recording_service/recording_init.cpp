@@ -191,6 +191,17 @@ void RecordingService::init_video_encoder(AVFormatContext *inputAvfc, AVStream *
     AVRational input_framerate = av_guess_frame_rate(inputAvfc, inputVideoAvs, nullptr);
     (*outputVideoAvcc)->time_base = av_inv_q(input_framerate);
 
+    // TODO: is this useful?
+    // set codec to automatically determine how many threads suits best for the decoding job
+    (*outputVideoAvcc)->thread_count = 0;
+
+    if ((*outputVideoAvc)->capabilities | AV_CODEC_CAP_FRAME_THREADS)
+        (*outputVideoAvcc)->thread_type = FF_THREAD_FRAME;
+    else if ((*outputVideoAvc)->capabilities | AV_CODEC_CAP_SLICE_THREADS)
+        (*outputVideoAvcc)->thread_type = FF_THREAD_SLICE;
+    else
+        (*outputVideoAvcc)->thread_count = 1; //don't use multithreading
+
     // Open encoder
     ret = avcodec_open2(*outputVideoAvcc, *outputVideoAvc, nullptr);
     if (ret < 0) {

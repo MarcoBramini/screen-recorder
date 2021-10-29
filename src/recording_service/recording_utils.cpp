@@ -4,12 +4,14 @@
 /// Returns the options associated to an input device.
 std::map<std::string, std::string> RecordingService::get_device_options(const std::string &deviceID) {
     if (deviceID == "avfoundation") {
-        return {{"framerate",      "30"},
+        return {
+                {"video_size",     "1000x500"},
+                {"framerate",      "30"},
                 {"capture_cursor", "true"}};
     }
 
     if (deviceID == "x11grab") {
-        return {{"framerate",      "25"},
+        return {{"framerate",  "25"},
                 {"video_size", "1000x500"}};
     }
 
@@ -42,7 +44,7 @@ std::tuple<std::string, std::string> RecordingService::unpackDeviceAddress(const
     return std::make_tuple(deviceID, url);
 }
 
-std::string RecordingService::unpackAVError(int avErrorCode){
-    char a[AV_ERROR_MAX_STRING_SIZE] = { 0 };
+std::string RecordingService::unpackAVError(int avErrorCode) {
+    char a[AV_ERROR_MAX_STRING_SIZE] = {0};
     return av_make_error_string(a, AV_ERROR_MAX_STRING_SIZE, avErrorCode);
 }

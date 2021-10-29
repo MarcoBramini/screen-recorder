@@ -1,5 +1,6 @@
 #include "recording_service.h"
 #include <thread>
+#include <chrono>
 #include <csignal>
 #include <map>
 #include <fmt/core.h>
@@ -11,18 +12,26 @@ bool readAux = true;
 
 /// Read a new packet from the input device(s) in Round Robin fashion.
 /// If the device is the same for audio and video, it reads from the same context for both audio and video.
-/// On success, it returns 0 (inputAvfc) or 1 (inputAuxAvfc) depending on the device the packet come from.
+/// On success, it returns 0 (video) or 1 (audio) depending on the packet's nature.
 /// Returns the AVERROR, returned by the av_read_frame function, on failure.
 int read_next_frame(AVFormatContext *inputAvfc, AVFormatContext *inputAuxAvfc, AVPacket *inputPacket) {
     readAux = !readAux;
     // Select the device context to use
     AVFormatContext *currentCtx = (!readAux) ? inputAvfc : inputAuxAvfc;
+
     // Read next frame and fill the return packet
     int ret = av_read_frame(currentCtx, inputPacket);
     if (ret < 0) {
         return ret;
     }
-    return readAux;
+
+    if (currentCtx->streams[inputPacket->stream_index]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
+        return 0;
+    } else if (currentCtx->streams[inputPacket->stream_index]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
+        return 1;
+    } else {
+        return -1; // throw here
+    }
 }
 
 int64_t last_video_pts = 0;
@@ -62,13 +71,13 @@ int RecordingService::start_capture_loop() {
             throw std::runtime_error(error);
         }
 
-        switch(res){
+        switch (res) {
             case 0:
                 enqueue_video_packet(inputPacket);
                 break;
             case 1:
+            default:
                 enqueue_audio_packet(inputPacket);
-
                 break;
         }
 
@@ -101,21 +110,22 @@ int RecordingService::process_video_queue() {
         std::tie(videoPacket, packetPts) = videoPacketsQueue.front();
         videoPacketsQueue.pop();
 
-        std::cout << "\r Packet Queues - video: " << videoPacketsQueue.size() << " audio: " << audioPacketsQueue.size();
-        std::cout << "\r Last PTS - video: " << packetPts << " audio: " << audioPacketsQueue.size();
-
         int ret = transcode_video(videoPacket, packetPts);
         if (ret < 0) {
             // Handle
             return -1;
         }
+
     }
     return 0;
 }
 
-void RecordingService::rec_stats_loop(){
+void RecordingService::rec_stats_loop() {
     while (!mustTerminateStop && !mustTerminateSignal) {
-        std::cout << "\r Packet Queues - video: " << videoPacketsQueue.size() << " audio: " << audioPacketsQueue.size();
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        std::cout << "\r Packet Queues - video: " << videoPacketsQueue.size() << " audio: " << audioPacketsQueue.size()
+                  << "Last PTS - video: " << last_video_pts << " audio: "
+                  << av_rescale_q(last_audio_pts, outputAudioAvcc->time_base, {1, 1000});
     }
 }
 
@@ -162,7 +172,7 @@ int RecordingService::start_recording() {
         process_audio_queue();
     });
 
-    recStatsThread = std::thread([this](){
+    recStatsThread = std::thread([this]() {
         rec_stats_loop();
     });
 
