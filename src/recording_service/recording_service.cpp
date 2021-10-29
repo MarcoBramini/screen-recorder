@@ -101,6 +101,9 @@ int RecordingService::process_video_queue() {
         std::tie(videoPacket, packetPts) = videoPacketsQueue.front();
         videoPacketsQueue.pop();
 
+        std::cout << "\r Packet Queues - video: " << videoPacketsQueue.size() << " audio: " << audioPacketsQueue.size();
+        std::cout << "\r Last PTS - video: " << packetPts << " audio: " << audioPacketsQueue.size();
+
         int ret = transcode_video(videoPacket, packetPts);
         if (ret < 0) {
             // Handle
@@ -116,6 +119,13 @@ void RecordingService::rec_stats_loop(){
     }
 }
 
+int RecordingService::process_audio_queue() {
+    while (true) {
+        if (audioPacketsQueue.empty()) {
+            if (!mustTerminateStop && !mustTerminateSignal)
+                continue;
+            break;
+        };
 
         AVPacket *audioPacket;
         int64_t packetPts;
@@ -152,6 +162,10 @@ int RecordingService::start_recording() {
         process_audio_queue();
     });
 
+    recStatsThread = std::thread([this](){
+        rec_stats_loop();
+    });
+
     return 0;
 }
 
@@ -180,6 +194,9 @@ int RecordingService::stop_recording() {
 
     if (audioProcessThread.joinable())
         audioProcessThread.join();
+
+    if (recStatsThread.joinable())
+        recStatsThread.join();
 
     if (encode_video(0, nullptr)) return -1;
     if (encode_audio_from_buffer(0, true)) return -1;
