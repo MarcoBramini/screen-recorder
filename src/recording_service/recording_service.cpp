@@ -25,20 +25,14 @@ int read_next_frame(AVFormatContext *inputAvfc, AVFormatContext *inputAuxAvfc, A
         return ret;
     }
 
-    if (currentCtx->streams[inputPacket->stream_index]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
-        return 0;
-    } else if (currentCtx->streams[inputPacket->stream_index]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
-        return 1;
-    } else {
-        return -1; // throw here
-    }
+    return currentCtx->streams[inputPacket->stream_index]->codecpar->codec_type;
 }
 
 int64_t last_video_pts = 0;
 
 void RecordingService::enqueue_video_packet(AVPacket *inputVideoPacket) {
     auto videoPacket = av_packet_clone(inputVideoPacket);
-    videoPacketsQueue.push(std::make_tuple(videoPacket, last_video_pts));
+    capturedPacketsQueue.push(std::make_tuple(videoPacket, last_video_pts, AVMEDIA_TYPE_VIDEO));
     last_video_pts += (int) (1000 / 30);
 }
 
@@ -48,7 +42,7 @@ void RecordingService::enqueue_audio_packet(AVPacket *inputAudioPacket) {
     int64_t frameDuration = av_get_audio_frame_duration(outputAudioAvcc, outputAudioAvcc->frame_size);
 
     auto audioPacket = av_packet_clone(inputAudioPacket);
-    audioPacketsQueue.push(std::make_tuple(audioPacket, last_audio_pts));
+    capturedPacketsQueue.push(std::make_tuple(audioPacket, last_audio_pts, AVMEDIA_TYPE_AUDIO));
     last_audio_pts += frameDuration / 2;
 }
 
@@ -72,13 +66,15 @@ int RecordingService::start_capture_loop() {
         }
 
         switch (res) {
-            case 0:
+            case AVMEDIA_TYPE_VIDEO:
                 enqueue_video_packet(inputPacket);
                 break;
-            case 1:
-            default:
+            case AVMEDIA_TYPE_AUDIO:
                 enqueue_audio_packet(inputPacket);
                 break;
+            default:
+                throw std::runtime_error(
+                        build_error_message(__FUNCTION__, {}, fmt::format("unexpected packet type ({})", res)));
         }
 
         if (mustTerminateSignal || mustTerminateStop) {
@@ -97,58 +93,55 @@ int RecordingService::start_capture_loop() {
     return 0;
 }
 
-int RecordingService::process_video_queue() {
+int64_t last_processed_video_pts = 0;
+int64_t last_processed_audio_pts = 0;
+
+int RecordingService::process_captured_packets_queue() {
     while (true) {
-        if (videoPacketsQueue.empty()) {
+        if (capturedPacketsQueue.empty()) {
             if (!mustTerminateStop && !mustTerminateSignal)
                 continue;
             break;
         };
 
-        AVPacket *videoPacket;
+        AVPacket *packet;
         int64_t packetPts;
-        std::tie(videoPacket, packetPts) = videoPacketsQueue.front();
-        videoPacketsQueue.pop();
+        AVMediaType packetType;
+        std::tie(packet, packetPts, packetType) = capturedPacketsQueue.front();
+        capturedPacketsQueue.pop();
 
-        int ret = transcode_video(videoPacket, packetPts);
+        int ret;
+        switch (packetType) {
+            case AVMEDIA_TYPE_VIDEO:
+                ret = transcode_video(packet, packetPts);
+                last_processed_video_pts = packetPts;
+                break;
+            case AVMEDIA_TYPE_AUDIO:
+                ret = transcode_audio(packet, packetPts);
+                last_processed_audio_pts = packetPts;
+                break;
+            default:
+                throw std::runtime_error(
+                        build_error_message(__FUNCTION__, {}, fmt::format("unexpected packet type ({})", packetType)));
+        }
         if (ret < 0) {
             // Handle
             return -1;
         }
-
     }
     return 0;
 }
 
 void RecordingService::rec_stats_loop() {
     while (!mustTerminateStop && !mustTerminateSignal) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
-        std::cout << "\r Packet Queues - video: " << videoPacketsQueue.size() << " audio: " << audioPacketsQueue.size()
-                  << "Last PTS - video: " << last_video_pts << " audio: "
-                  << av_rescale_q(last_audio_pts, outputAudioAvcc->time_base, {1, 1000});
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
+        std::cout << "\r Packet Queues - video: " << capturedPacketsQueue.size() << " audio: "
+                  << capturedPacketsQueue.size()
+                  << "Last Captured PTS - video: " << last_video_pts << " audio: "
+                  << av_rescale_q(last_audio_pts, outputAudioAvcc->time_base, {1, 1000})
+                  << "Last Processed PTS - video: " << last_processed_video_pts << " audio: "
+                  << av_rescale_q(last_processed_audio_pts, outputAudioAvcc->time_base, {1, 1000});
     }
-}
-
-int RecordingService::process_audio_queue() {
-    while (true) {
-        if (audioPacketsQueue.empty()) {
-            if (!mustTerminateStop && !mustTerminateSignal)
-                continue;
-            break;
-        };
-
-        AVPacket *audioPacket;
-        int64_t packetPts;
-        std::tie(audioPacket, packetPts) = audioPacketsQueue.front();
-        audioPacketsQueue.pop();
-
-        int ret = transcode_audio(audioPacket, packetPts);
-        if (ret < 0) {
-            // Handle
-            return -1;
-        }
-    }
-    return 0;
 }
 
 int RecordingService::start_recording() {
@@ -164,15 +157,11 @@ int RecordingService::start_recording() {
         start_capture_loop();
     });
 
-    videoProcessThread = std::thread([this]() {
-        process_video_queue();
+    capturedPacketsProcessThread = std::thread([this]() {
+        process_captured_packets_queue();
     });
 
-    audioProcessThread = std::thread([this]() {
-        process_audio_queue();
-    });
-
-    recStatsThread = std::thread([this]() {
+    recordingStatsThread = std::thread([this]() {
         rec_stats_loop();
     });
 
@@ -199,14 +188,11 @@ int RecordingService::stop_recording() {
     if (captureThread.joinable())
         captureThread.join();
 
-    if (videoProcessThread.joinable())
-        videoProcessThread.join();
+    if (capturedPacketsProcessThread.joinable())
+        capturedPacketsProcessThread.join();
 
-    if (audioProcessThread.joinable())
-        audioProcessThread.join();
-
-    if (recStatsThread.joinable())
-        recStatsThread.join();
+    if (recordingStatsThread.joinable())
+        recordingStatsThread.join();
 
     if (encode_video(0, nullptr)) return -1;
     if (encode_audio_from_buffer(0, true)) return -1;
