@@ -8,7 +8,7 @@ int RecordingService::convert_video(AVFrame *videoInputFrame, AVFrame *videoOutp
     videoOutputFrame->format = OUTPUT_VIDEO_PIXEL_FMT;
     videoOutputFrame->width = outputVideoAvcc->width;
     videoOutputFrame->height = outputVideoAvcc->height;
-    av_frame_get_buffer(videoOutputFrame,0);
+    av_frame_get_buffer(videoOutputFrame, 0);
 
     if (sws_scale(videoConverter, videoInputFrame->data, videoInputFrame->linesize, 0, videoInputFrame->height,
                   videoOutputFrame->data, videoOutputFrame->linesize) < 0) {
@@ -95,13 +95,10 @@ int RecordingService::transcode_video(AVPacket *videoInputPacket, int64_t packet
             }
             if (encode_video(packetPts, convertedFrame)) {
                 throw std::runtime_error("Error converting audio frame");
-
             }
+            av_frame_free(&convertedFrame);
         }
-        av_frame_unref(videoInputFrame);
     }
-    av_packet_unref(videoInputPacket);
-    av_packet_free(&videoInputPacket);
     av_frame_free(&videoInputFrame);
     return 0;
 }
@@ -134,6 +131,7 @@ int RecordingService::convert_audio(AVFrame *audioInputFrame) {
 }
 
 int64_t last_encoded_audio_dts = -1;
+
 int RecordingService::encode_audio_from_buffer(int64_t framePts, bool shouldFlush) {
 
     AVPacket *output_packet = av_packet_alloc();
@@ -142,15 +140,17 @@ int RecordingService::encode_audio_from_buffer(int64_t framePts, bool shouldFlus
         return -1;
     }
 
-    while (av_audio_fifo_size(audioConverterBuffer) >= outputAudioAvcc->frame_size) {
-        AVFrame *outputFrame = nullptr;
+    AVFrame *outputFrame = nullptr;
+    if (!shouldFlush) {
+        outputFrame = av_frame_alloc();
+        if (outputFrame == nullptr) {
+            throw std::runtime_error("Error allocating new frame");
+        }
+    }
 
+    while (av_audio_fifo_size(audioConverterBuffer) >= outputAudioAvcc->frame_size) {
         if (!shouldFlush) {
             // Build frame from buffer
-            outputFrame = av_frame_alloc();
-            if (outputFrame == nullptr) {
-                throw std::runtime_error("Error allocating new frame");
-            }
             outputFrame->nb_samples = outputAudioAvcc->frame_size;
             outputFrame->channels = outputAudioAvcc->channels;
             outputFrame->channel_layout = outputAudioAvcc->channel_layout;
@@ -194,12 +194,10 @@ int RecordingService::encode_audio_from_buffer(int64_t framePts, bool shouldFlus
             }
         }
 
-        av_packet_unref(output_packet);
-        if (shouldFlush) {
-            av_packet_free(&output_packet);
-            return 0;
-        }
     }
+    av_frame_unref(outputFrame);
+    av_frame_free(&outputFrame);
+    av_packet_unref(output_packet);
     av_packet_free(&output_packet);
 
     return 0;
@@ -236,10 +234,7 @@ int RecordingService::transcode_audio(AVPacket *audioInputPacket, int64_t packet
                 throw std::runtime_error("Error converting audio frame");
             }
         }
-        av_frame_unref(audioInputFrame);
     }
-    av_packet_unref(audioInputPacket);
-    av_packet_free(&audioInputPacket);
     av_frame_free(&audioInputFrame);
     return 0;
 }

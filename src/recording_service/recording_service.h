@@ -32,7 +32,6 @@ class RecordingService {
     // -------
 
     std::thread captureThread;
-    std::thread audioProcessThread;
     std::thread capturedPacketsProcessThread;
     std::thread recordingStatsThread;
 

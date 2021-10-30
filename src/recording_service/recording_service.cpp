@@ -47,15 +47,10 @@ void RecordingService::enqueue_audio_packet(AVPacket *inputAudioPacket) {
 }
 
 int RecordingService::start_capture_loop() {
-    AVPacket *inputPacket = av_packet_alloc();
-    if (!inputPacket) {
-        //Handle
-        return -1;
-    }
-
+    AVPacket inputPacket;
 
     while (true) {
-        int res = read_next_frame(inputAvfc, inputAuxAvfc, inputPacket);
+        int res = read_next_frame(inputAvfc, inputAuxAvfc, &inputPacket);
         if (res == AVERROR(EAGAIN))
             continue;
 
@@ -67,28 +62,26 @@ int RecordingService::start_capture_loop() {
 
         switch (res) {
             case AVMEDIA_TYPE_VIDEO:
-                enqueue_video_packet(inputPacket);
+                enqueue_video_packet(&inputPacket);
                 break;
             case AVMEDIA_TYPE_AUDIO:
-                enqueue_audio_packet(inputPacket);
+                enqueue_audio_packet(&inputPacket);
                 break;
             default:
                 throw std::runtime_error(
                         build_error_message(__FUNCTION__, {}, fmt::format("unexpected packet type ({})", res)));
         }
 
+        av_packet_unref(&inputPacket);
+
         if (mustTerminateSignal || mustTerminateStop) {
             break;
         }
     }
 
-    av_packet_free(&inputPacket);
-    inputPacket = nullptr;
-
     if (mustTerminateSignal) {
         stop_recording();
     }
-
 
     return 0;
 }
@@ -128,6 +121,8 @@ int RecordingService::process_captured_packets_queue() {
             // Handle
             return -1;
         }
+
+        av_packet_free(&packet);
     }
     return 0;
 }
@@ -202,21 +197,45 @@ int RecordingService::stop_recording() {
         return -1;
     }
 
-    avformat_close_input(&inputAvfc);
-    //avformat_close_input(&this->inputCtx->avfcAux);
 
+    if (inputAvfc != inputAuxAvfc){
+        avformat_close_input(&inputAuxAvfc);
+        avformat_free_context(inputAuxAvfc);
+    }
+    avformat_close_input(&inputAvfc);
     avformat_free_context(inputAvfc);
+
     inputAvfc = nullptr;
-    //avformat_free_context(this->inputCtx->avfcAux);
-    //this->inputCtx->avfcAux = NULL;
+    inputAuxAvfc = nullptr;
+    avformat_close_input(&outputAvfc);
     avformat_free_context(outputAvfc);
     outputAvfc = nullptr;
 
+    avcodec_close(inputVideoAvcc);
     avcodec_free_context(&inputVideoAvcc);
     inputVideoAvcc = nullptr;
 
+    avcodec_close(inputAudioAvcc);
     avcodec_free_context(&inputAudioAvcc);
     inputAudioAvcc = nullptr;
+
+    avcodec_close(outputVideoAvcc);
+    avcodec_free_context(&outputVideoAvcc);
+    outputVideoAvcc = nullptr;
+
+    avcodec_close(outputAudioAvcc);
+    avcodec_free_context(&outputAudioAvcc);
+    outputAudioAvcc = nullptr;
+
+    sws_freeContext(videoConverter);
+    videoConverter = nullptr;
+
+    swr_free(&audioConverter);
+    audioConverter = nullptr;
+
+    av_audio_fifo_free(audioConverterBuffer);
+    audioConverterBuffer = nullptr;
+
 
     return 0;
 }
