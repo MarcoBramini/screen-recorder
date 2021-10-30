@@ -46,21 +46,23 @@ void RecordingService::enqueue_audio_packet(AVPacket *inputAudioPacket) {
     last_audio_pts += frameDuration / 2;
 }
 
-int RecordingService::start_capture_loop() {
+int RecordingService::start_capture_loop(AVFormatContext * inputAvfc) {
     AVPacket inputPacket;
 
     while (true) {
-        int res = read_next_frame(inputAvfc, inputAuxAvfc, &inputPacket);
-        if (res == AVERROR(EAGAIN))
+        int ret = av_read_frame(inputAvfc, &inputPacket);
+        if (ret == AVERROR(EAGAIN))
             continue;
 
-        if (res < 0) {
+        if (ret < 0) {
             std::string error = "Capture failed with:";
-            error.append(unpackAVError(res));
+            error.append(unpackAVError(ret));
             throw std::runtime_error(error);
         }
 
-        switch (res) {
+        AVMediaType packetType = inputAvfc->streams[inputPacket.stream_index]->codecpar->codec_type;
+
+        switch (packetType) {
             case AVMEDIA_TYPE_VIDEO:
                 enqueue_video_packet(&inputPacket);
                 break;
@@ -69,7 +71,7 @@ int RecordingService::start_capture_loop() {
                 break;
             default:
                 throw std::runtime_error(
-                        build_error_message(__FUNCTION__, {}, fmt::format("unexpected packet type ({})", res)));
+                        build_error_message(__FUNCTION__, {}, fmt::format("unexpected packet type ({})", ret)));
         }
 
         av_packet_unref(&inputPacket);
@@ -148,8 +150,12 @@ int RecordingService::start_recording() {
 
 
     // Call start_recording_loop in a new thread
-    captureThread = std::thread([this]() {
-        start_capture_loop();
+    videoCaptureThread = std::thread([this]() {
+        start_capture_loop(inputAvfc);
+    });
+
+    audioCaptureThread = std::thread([this]() {
+        start_capture_loop(inputAuxAvfc);
     });
 
     capturedPacketsProcessThread = std::thread([this]() {
@@ -180,8 +186,11 @@ int RecordingService::resume_recording() {
 int RecordingService::stop_recording() {
     mustTerminateStop = true;
 
-    if (captureThread.joinable())
-        captureThread.join();
+    if (videoCaptureThread.joinable())
+        videoCaptureThread.join();
+
+    if (audioCaptureThread.joinable())
+        audioCaptureThread.join();
 
     if (capturedPacketsProcessThread.joinable())
         capturedPacketsProcessThread.join();

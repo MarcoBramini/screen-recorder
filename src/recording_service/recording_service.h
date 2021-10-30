@@ -31,7 +31,8 @@ class RecordingService {
     // Threads
     // -------
 
-    std::thread captureThread;
+    std::thread videoCaptureThread;
+    std::thread audioCaptureThread;
     std::thread capturedPacketsProcessThread;
     std::thread recordingStatsThread;
 
@@ -131,7 +132,7 @@ class RecordingService {
                        AVCodecContext **outputAudioAvcc);
 
     // recording_service.cpp
-    int start_capture_loop();
+    int start_capture_loop(AVFormatContext * inputAvfc);
 
     int process_captured_packets_queue();
 
