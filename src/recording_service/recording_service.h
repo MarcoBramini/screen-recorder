@@ -45,7 +45,8 @@ class RecordingService {
 
     std::thread videoCaptureThread;
     std::thread audioCaptureThread;
-    std::thread capturedPacketsProcessThread;
+    std::thread capturedVideoPacketsProcessThread;
+    std::thread capturedAudioPacketsProcessThread;
     std::thread recordingStatsThread;
     std::thread controlThread;
 
@@ -53,7 +54,8 @@ class RecordingService {
     // Processing queue
     // ----------------
 
-    std::queue<std::tuple<AVPacket *, int64_t, AVMediaType>> capturedPacketsQueue;
+    std::queue<std::tuple<AVPacket *, int64_t, AVMediaType>> capturedVideoPacketsQueue;
+    std::queue<std::tuple<AVPacket *, int64_t, AVMediaType>> capturedAudioPacketsQueue;
 
     // ------
     // Input
@@ -145,9 +147,9 @@ class RecordingService {
                        AVCodecContext **outputAudioAvcc);
 
     // recording_service.cpp
-    int start_capture_loop(AVFormatContext * inputAvfc);
+    int start_capture_loop(bool readFromAux);
 
-    int process_captured_packets_queue();
+    int process_captured_packets_queue(bool readFromAux);
 
     int encode_audio_from_buffer(int64_t framePts, bool shouldFlush);
 

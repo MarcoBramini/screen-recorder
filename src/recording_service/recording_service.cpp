@@ -7,49 +7,33 @@
 
 static bool mustTerminateSignal = false;
 
-bool readAux = true;
-
-/// Read a new packet from the input device(s) in Round Robin fashion.
-/// If the device is the same for audio and video, it reads from the same context for both audio and video.
-/// On success, it returns 0 (video) or 1 (audio) depending on the packet's nature.
-/// Returns the AVERROR, returned by the av_read_frame function, on failure.
-int read_next_frame(AVFormatContext *inputAvfc, AVFormatContext *inputAuxAvfc, AVPacket *inputPacket) {
-    readAux = !readAux;
-    // Select the device context to use
-    AVFormatContext *currentCtx = (!readAux) ? inputAvfc : inputAuxAvfc;
-
-    // Read next frame and fill the return packet
-    int ret = av_read_frame(currentCtx, inputPacket);
-    if (ret < 0) {
-        return ret;
-    }
-
-    return currentCtx->streams[inputPacket->stream_index]->codecpar->codec_type;
-}
-
 int64_t last_video_pts = 0;
 
 void RecordingService::enqueue_video_packet(AVPacket *inputVideoPacket) {
     auto videoPacket = av_packet_clone(inputVideoPacket);
-    capturedPacketsQueue.push(std::make_tuple(videoPacket, last_video_pts, AVMEDIA_TYPE_VIDEO));
+
+    capturedVideoPacketsQueue.push(std::make_tuple(videoPacket, last_video_pts, AVMEDIA_TYPE_VIDEO));
+
     last_video_pts += (int) (1000 / 30);
 }
 
 int64_t last_audio_pts = 0;
 
 void RecordingService::enqueue_audio_packet(AVPacket *inputAudioPacket) {
-    int64_t frameDuration = av_get_audio_frame_duration(outputAudioAvcc, outputAudioAvcc->frame_size);
-
     auto audioPacket = av_packet_clone(inputAudioPacket);
-    capturedPacketsQueue.push(std::make_tuple(audioPacket, last_audio_pts, AVMEDIA_TYPE_AUDIO));
+
+    capturedAudioPacketsQueue.push(std::make_tuple(audioPacket, last_audio_pts, AVMEDIA_TYPE_AUDIO));
+
+    int64_t frameDuration = av_get_audio_frame_duration(outputAudioAvcc, outputAudioAvcc->frame_size);
     last_audio_pts += frameDuration / 2;
 }
 
-int RecordingService::start_capture_loop(AVFormatContext *inputAvfc) {
-    AVPacket inputPacket;
+int RecordingService::start_capture_loop(bool readFromAux) {
+    AVFormatContext *currentAvfc = (!readFromAux) ? inputAvfc : inputAuxAvfc;
 
+    AVPacket inputPacket;
     while (recordingStatus == RECORDING) {
-        int ret = av_read_frame(inputAvfc, &inputPacket);
+        int ret = av_read_frame(currentAvfc, &inputPacket);
         if (ret == AVERROR(EAGAIN))
             continue;
 
@@ -59,7 +43,7 @@ int RecordingService::start_capture_loop(AVFormatContext *inputAvfc) {
             throw std::runtime_error(error);
         }
 
-        AVMediaType packetType = inputAvfc->streams[inputPacket.stream_index]->codecpar->codec_type;
+        AVMediaType packetType = currentAvfc->streams[inputPacket.stream_index]->codecpar->codec_type;
 
         switch (packetType) {
             case AVMEDIA_TYPE_VIDEO:
@@ -81,19 +65,23 @@ int RecordingService::start_capture_loop(AVFormatContext *inputAvfc) {
 int64_t last_processed_video_pts = 0;
 int64_t last_processed_audio_pts = 0;
 
-int RecordingService::process_captured_packets_queue() {
+int RecordingService::process_captured_packets_queue(bool readFromAux) {
+
+    auto *currentQueue = (!readFromAux) ? &capturedVideoPacketsQueue : &capturedAudioPacketsQueue;
+
     while (true) {
-        if (capturedPacketsQueue.empty()) {
+
+        if (currentQueue->empty()) {
             if (recordingStatus == RECORDING)
                 continue;
             break;
-        };
+        }
 
         AVPacket *packet;
         int64_t packetPts;
         AVMediaType packetType;
-        std::tie(packet, packetPts, packetType) = capturedPacketsQueue.front();
-        capturedPacketsQueue.pop();
+        std::tie(packet, packetPts, packetType) = currentQueue->front();
+        currentQueue->pop();
 
         int ret;
         switch (packetType) {
@@ -114,7 +102,7 @@ int RecordingService::process_captured_packets_queue() {
             return -1;
         }
 
-        av_packet_free(&packet);
+        av_packet_unref(packet);
     }
     return 0;
 }
@@ -122,8 +110,7 @@ int RecordingService::process_captured_packets_queue() {
 void RecordingService::rec_stats_loop() {
     while (recordingStatus == RECORDING) {
         std::this_thread::sleep_for(std::chrono::milliseconds(300));
-        std::cout << "\r Packet Queues - video: " << capturedPacketsQueue.size() << " audio: "
-                  << capturedPacketsQueue.size()
+        std::cout << "\r Packet Queue Size: " << capturedVideoPacketsQueue.size()
                   << "Last Captured PTS - video: " << last_video_pts << " audio: "
                   << av_rescale_q(last_audio_pts, outputAudioAvcc->time_base, {1, 1000})
                   << "Last Processed PTS - video: " << last_processed_video_pts << " audio: "
@@ -138,24 +125,31 @@ int RecordingService::start_recording() {
         return -1;
     }
 
+    recordingStatus = RECORDING;
+
     // Call start_recording_loop in a new thread
     videoCaptureThread = std::thread([this]() {
-        start_capture_loop(inputAvfc);
+        start_capture_loop(false);
     });
+
 
     audioCaptureThread = std::thread([this]() {
-        start_capture_loop(inputAuxAvfc);
+        start_capture_loop(true);
     });
 
-    capturedPacketsProcessThread = std::thread([this]() {
-        process_captured_packets_queue();
+
+    capturedVideoPacketsProcessThread = std::thread([this]() {
+        process_captured_packets_queue(false);
     });
+
+    capturedAudioPacketsProcessThread = std::thread([this]() {
+        process_captured_packets_queue(true);
+    });
+
 
     recordingStatsThread = std::thread([this]() {
         rec_stats_loop();
     });
-
-    recordingStatus = RECORDING;
 
     return 0;
 }
@@ -181,14 +175,19 @@ int RecordingService::stop_recording() {
     if (recordingStatus == IDLE || recordingStatus == STOP) return 0;
     recordingStatus = STOP;
 
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
     if (videoCaptureThread.joinable())
         videoCaptureThread.join();
 
     if (audioCaptureThread.joinable())
         audioCaptureThread.join();
 
-    if (capturedPacketsProcessThread.joinable())
-        capturedPacketsProcessThread.join();
+    if (capturedVideoPacketsProcessThread.joinable())
+        capturedVideoPacketsProcessThread.join();
+
+    if (capturedAudioPacketsProcessThread.joinable())
+        capturedAudioPacketsProcessThread.join();
 
     if (recordingStatsThread.joinable())
         recordingStatsThread.join();
@@ -319,6 +318,7 @@ RecordingService::RecordingService(const std::string &videoAddress, const std::s
         if (mustTerminateSignal) {
             std::cout << "exiting" << std::endl;
             stop_recording();
+            std::cout << "exited" << std::endl;
         }
     });
 }
