@@ -12,9 +12,10 @@ int64_t last_video_pts = 0;
 void RecordingService::enqueue_video_packet(AVPacket *inputVideoPacket) {
     auto videoPacket = av_packet_clone(inputVideoPacket);
 
-    capturedVideoPacketsQueue.push(std::make_tuple(videoPacket, last_video_pts, AVMEDIA_TYPE_VIDEO));
+     int64_t pts = av_rescale_q(inputVideoPacket->pts-inputVideoAvs->start_time, inputVideoAvs->time_base, outputVideoAvcc->time_base);
 
-    last_video_pts += (int) (1000 / 30);
+    capturedVideoPacketsQueue.push(std::make_tuple(videoPacket, pts, AVMEDIA_TYPE_VIDEO));
+    last_video_pts = pts;
 }
 
 int64_t last_audio_pts = 0;
@@ -22,10 +23,11 @@ int64_t last_audio_pts = 0;
 void RecordingService::enqueue_audio_packet(AVPacket *inputAudioPacket) {
     auto audioPacket = av_packet_clone(inputAudioPacket);
 
-    capturedAudioPacketsQueue.push(std::make_tuple(audioPacket, last_audio_pts, AVMEDIA_TYPE_AUDIO));
+    int64_t pts = av_rescale_q(inputAudioPacket->pts-inputAudioAvs->start_time, inputAudioAvs->time_base, outputAudioAvcc->time_base);
 
-    int64_t frameDuration = av_get_audio_frame_duration(outputAudioAvcc, outputAudioAvcc->frame_size);
-    last_audio_pts += frameDuration / 2;
+    capturedAudioPacketsQueue.push(std::make_tuple(audioPacket, pts, AVMEDIA_TYPE_AUDIO));
+
+    last_audio_pts =pts;
 }
 
 int RecordingService::start_capture_loop(bool readFromAux) {
@@ -111,9 +113,9 @@ void RecordingService::rec_stats_loop() {
     while (recordingStatus == RECORDING) {
         std::this_thread::sleep_for(std::chrono::milliseconds(300));
         std::cout << "\r Packet Queue Size: " << capturedVideoPacketsQueue.size()
-                  << "Last Captured PTS - video: " << last_video_pts << " audio: "
+                  << "Last Captured PTS - video: " << av_rescale_q(last_video_pts, outputVideoAvcc->time_base, {1, 1000}) << " audio: "
                   << av_rescale_q(last_audio_pts, outputAudioAvcc->time_base, {1, 1000})
-                  << "Last Processed PTS - video: " << last_processed_video_pts << " audio: "
+                  << "Last Processed PTS - video: " << av_rescale_q(last_processed_video_pts, outputVideoAvcc->time_base, {1, 1000}) << " audio: "
                   << av_rescale_q(last_processed_audio_pts, outputAudioAvcc->time_base, {1, 1000});
     }
 }

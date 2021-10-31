@@ -29,7 +29,8 @@ int RecordingService::encode_video(int64_t framePts, AVFrame *videoInputFrame) {
 
     if (videoInputFrame != nullptr) {
         videoInputFrame->pict_type = AV_PICTURE_TYPE_NONE;
-        videoInputFrame->pts = av_rescale_q(framePts, {1, 1000}, outputVideoAvcc->time_base);
+        videoInputFrame->pts = framePts;
+        //videoInputFrame->pts = av_rescale_q(framePts, {1, 1000}, outputVideoAvcc->time_base);
     }
 
     int response = avcodec_send_frame(outputVideoAvcc, videoInputFrame);
@@ -49,7 +50,7 @@ int RecordingService::encode_video(int64_t framePts, AVFrame *videoInputFrame) {
 
         av_packet_rescale_ts(output_packet, outputVideoAvcc->time_base, outputVideoAvs->time_base);
 
-        if (output_packet->dts == last_encoded_video_dts) {
+        if (output_packet->dts <= last_encoded_video_dts) {
             continue;
         }
         last_encoded_video_dts = output_packet->dts;
@@ -108,7 +109,6 @@ int RecordingService::convert_audio(AVFrame *audioInputFrame) {
     int ret = av_samples_alloc_array_and_samples(&audioData, nullptr, outputAudioAvcc->channels,
                                                  audioInputFrame->nb_samples, OUTPUT_AUDIO_SAMPLE_FMT, 0);
     if (ret < 0) {
-        std::cout<<ret<<std::endl;
         throw std::runtime_error("Fail to alloc samples by av_samples_alloc_array_and_samples.");
     }
 
@@ -183,10 +183,7 @@ int RecordingService::encode_audio_from_buffer(int64_t framePts, bool shouldFlus
 
             output_packet->stream_index = outputAudioAvs->index;
 
-            output_packet->pts = framePts;
-            output_packet->dts = framePts;
-
-            if (output_packet->dts == last_encoded_audio_dts) {
+            if (output_packet->dts <= last_encoded_audio_dts) {
                 continue;
             }
             last_encoded_audio_dts = output_packet->dts;
