@@ -25,7 +25,19 @@ const int64_t OUTPUT_AUDIO_BIT_RATE = 96000;
 const int OUTPUT_HEIGHT = 1080;
 const int OUTPUT_WIDTH = 1920;
 
+enum RecordingStatus {
+    IDLE,
+    RECORDING,
+    PAUSE,
+    STOP
+};
+
 class RecordingService {
+
+    // ------
+    // Status
+    // ------
+    RecordingStatus recordingStatus;
 
     // -------
     // Threads
@@ -35,6 +47,7 @@ class RecordingService {
     std::thread audioCaptureThread;
     std::thread capturedPacketsProcessThread;
     std::thread recordingStatsThread;
+    std::thread controlThread;
 
     // ----------------
     // Processing queue

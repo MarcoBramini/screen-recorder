@@ -6,7 +6,6 @@
 #include <fmt/core.h>
 
 static bool mustTerminateSignal = false;
-static bool mustTerminateStop = false;
 
 bool readAux = true;
 
@@ -46,10 +45,10 @@ void RecordingService::enqueue_audio_packet(AVPacket *inputAudioPacket) {
     last_audio_pts += frameDuration / 2;
 }
 
-int RecordingService::start_capture_loop(AVFormatContext * inputAvfc) {
+int RecordingService::start_capture_loop(AVFormatContext *inputAvfc) {
     AVPacket inputPacket;
 
-    while (true) {
+    while (recordingStatus == RECORDING) {
         int ret = av_read_frame(inputAvfc, &inputPacket);
         if (ret == AVERROR(EAGAIN))
             continue;
@@ -73,16 +72,7 @@ int RecordingService::start_capture_loop(AVFormatContext * inputAvfc) {
                 throw std::runtime_error(
                         build_error_message(__FUNCTION__, {}, fmt::format("unexpected packet type ({})", ret)));
         }
-
         av_packet_unref(&inputPacket);
-
-        if (mustTerminateSignal || mustTerminateStop) {
-            break;
-        }
-    }
-
-    if (mustTerminateSignal) {
-        stop_recording();
     }
 
     return 0;
@@ -94,7 +84,7 @@ int64_t last_processed_audio_pts = 0;
 int RecordingService::process_captured_packets_queue() {
     while (true) {
         if (capturedPacketsQueue.empty()) {
-            if (!mustTerminateStop && !mustTerminateSignal)
+            if (recordingStatus == RECORDING)
                 continue;
             break;
         };
@@ -130,7 +120,7 @@ int RecordingService::process_captured_packets_queue() {
 }
 
 void RecordingService::rec_stats_loop() {
-    while (!mustTerminateStop && !mustTerminateSignal) {
+    while (recordingStatus == RECORDING) {
         std::this_thread::sleep_for(std::chrono::milliseconds(300));
         std::cout << "\r Packet Queues - video: " << capturedPacketsQueue.size() << " audio: "
                   << capturedPacketsQueue.size()
@@ -147,7 +137,6 @@ int RecordingService::start_recording() {
         //Handle
         return -1;
     }
-
 
     // Call start_recording_loop in a new thread
     videoCaptureThread = std::thread([this]() {
@@ -166,6 +155,8 @@ int RecordingService::start_recording() {
         rec_stats_loop();
     });
 
+    recordingStatus = RECORDING;
+
     return 0;
 }
 
@@ -173,6 +164,8 @@ int RecordingService::pause_recording() {
     // Set pauseTimestamp
 
     // Set cond var isPaused to true
+    recordingStatus = PAUSE;
+
     return 0;
 }
 
@@ -180,11 +173,13 @@ int RecordingService::resume_recording() {
     // Increment pausedTime by resumeTimestamp - pauseTimestamp interval
 
     // Set cond var isPaused to false
+    recordingStatus = RECORDING;
     return 0;
 }
 
 int RecordingService::stop_recording() {
-    mustTerminateStop = true;
+    if (recordingStatus == IDLE || recordingStatus == STOP) return 0;
+    recordingStatus = STOP;
 
     if (videoCaptureThread.joinable())
         videoCaptureThread.join();
@@ -198,6 +193,7 @@ int RecordingService::stop_recording() {
     if (recordingStatsThread.joinable())
         recordingStatsThread.join();
 
+
     if (encode_video(0, nullptr)) return -1;
     if (encode_audio_from_buffer(0, true)) return -1;
 
@@ -206,8 +202,7 @@ int RecordingService::stop_recording() {
         return -1;
     }
 
-
-    if (inputAvfc != inputAuxAvfc){
+    if (inputAvfc != inputAuxAvfc) {
         avformat_close_input(&inputAuxAvfc);
         avformat_free_context(inputAuxAvfc);
     }
@@ -265,6 +260,8 @@ int RecordingService::stop_recording() {
 ///       audioAddress:"dshow:...."
 RecordingService::RecordingService(const std::string &videoAddress, const std::string &audioAddress,
                                    const std::string &outputFilename) {
+    recordingStatus = IDLE;
+
     // Initialize the LibAV devices
     avdevice_register_all();
 
@@ -311,7 +308,17 @@ RecordingService::RecordingService(const std::string &videoAddress, const std::s
 
     // Initialize signal to stop recording on sigterm
     std::signal(SIGTERM, [](int) {
-        std::cout << "echo" << std::endl;
+        std::cout << "sigterm" << std::endl;
         mustTerminateSignal = true;
+    });
+
+    controlThread = std::thread([this]() {
+        while (!mustTerminateSignal) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+        if (mustTerminateSignal) {
+            std::cout << "exiting" << std::endl;
+            stop_recording();
+        }
     });
 }
