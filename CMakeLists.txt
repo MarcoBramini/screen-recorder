@@ -23,7 +23,16 @@ add_executable(pds_screen_recording
         main.cpp
         src/device_service/input_device.h
         src/device_service/device_service.h
-        ${FILES})
+        src/recording_service/recording_service.cpp
+        src/recording_service/recording_service.h
+        src/recording_service/recording_init.cpp
+        src/recording_service/recording_utils.cpp
+        src/recording_service/recording_transcode.cpp
+        src/recording_service/device_context.cpp
+        src/recording_service/device_context.h
+        src/recording_service/stream_context.cpp
+        src/recording_service/stream_context.h
+        ${FILES} src/recording_service/error.cpp src/recording_service/error.h src/recording_service/process_chain.cpp src/recording_service/process_chain.h)
 
 
 target_link_libraries(pds_screen_recording avdevice)
