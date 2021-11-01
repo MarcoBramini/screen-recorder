@@ -11,7 +11,7 @@ std::map<std::string, std::string> RecordingService::get_device_options(const st
     }
 
     if (deviceID == "x11grab") {
-        return {{"framerate",  "25"},
+        return {{"framerate",  "30"},
                 {"video_size", "1000x500"}};
     }
 
