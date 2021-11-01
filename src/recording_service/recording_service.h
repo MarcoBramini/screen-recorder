@@ -180,6 +180,8 @@ public:
     void enqueue_audio_packet(AVPacket *inputAudioPacket);
 
     void rec_stats_loop();
+
+    void wait_recording();
 };
 
 

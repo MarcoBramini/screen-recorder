@@ -12,7 +12,8 @@ int64_t last_video_pts = 0;
 void RecordingService::enqueue_video_packet(AVPacket *inputVideoPacket) {
     auto videoPacket = av_packet_clone(inputVideoPacket);
 
-     int64_t pts = av_rescale_q(inputVideoPacket->pts-inputVideoAvs->start_time, inputVideoAvs->time_base, outputVideoAvcc->time_base);
+    int64_t pts = av_rescale_q(inputVideoPacket->pts - inputVideoAvs->start_time, inputVideoAvs->time_base,
+                               outputVideoAvcc->time_base);
 
     capturedVideoPacketsQueue.push(std::make_tuple(videoPacket, pts, AVMEDIA_TYPE_VIDEO));
     last_video_pts = pts;
@@ -23,11 +24,12 @@ int64_t last_audio_pts = 0;
 void RecordingService::enqueue_audio_packet(AVPacket *inputAudioPacket) {
     auto audioPacket = av_packet_clone(inputAudioPacket);
 
-    int64_t pts = av_rescale_q(inputAudioPacket->pts-inputAudioAvs->start_time, inputAudioAvs->time_base, outputAudioAvcc->time_base);
+    int64_t pts = av_rescale_q(inputAudioPacket->pts - inputAudioAvs->start_time, inputAudioAvs->time_base,
+                               outputAudioAvcc->time_base);
 
     capturedAudioPacketsQueue.push(std::make_tuple(audioPacket, pts, AVMEDIA_TYPE_AUDIO));
 
-    last_audio_pts =pts;
+    last_audio_pts = pts;
 }
 
 int RecordingService::start_capture_loop(bool readFromAux) {
@@ -113,9 +115,11 @@ void RecordingService::rec_stats_loop() {
     while (recordingStatus == RECORDING) {
         std::this_thread::sleep_for(std::chrono::milliseconds(300));
         std::cout << "\r Packet Queue Size: " << capturedVideoPacketsQueue.size()
-                  << "Last Captured PTS - video: " << av_rescale_q(last_video_pts, outputVideoAvcc->time_base, {1, 1000}) << " audio: "
+                  << "Last Captured PTS - video: "
+                  << av_rescale_q(last_video_pts, outputVideoAvcc->time_base, {1, 1000}) << " audio: "
                   << av_rescale_q(last_audio_pts, outputAudioAvcc->time_base, {1, 1000})
-                  << "Last Processed PTS - video: " << av_rescale_q(last_processed_video_pts, outputVideoAvcc->time_base, {1, 1000}) << " audio: "
+                  << "Last Processed PTS - video: "
+                  << av_rescale_q(last_processed_video_pts, outputVideoAvcc->time_base, {1, 1000}) << " audio: "
                   << av_rescale_q(last_processed_audio_pts, outputAudioAvcc->time_base, {1, 1000});
     }
 }
@@ -134,10 +138,11 @@ int RecordingService::start_recording() {
         start_capture_loop(false);
     });
 
-
-    audioCaptureThread = std::thread([this]() {
-        start_capture_loop(true);
-    });
+    if (inputAvfc != inputAuxAvfc) {
+        audioCaptureThread = std::thread([this]() {
+            start_capture_loop(true);
+        });
+    }
 
 
     capturedVideoPacketsProcessThread = std::thread([this]() {
@@ -307,13 +312,14 @@ RecordingService::RecordingService(const std::string &videoAddress, const std::s
     init_video_converter(inputVideoAvcc, outputVideoAvcc, &videoConverter);
     init_audio_converter(inputAudioAvcc, outputAudioAvcc, &audioConverter, &audioConverterBuffer);
 
-    // Initialize signal to stop recording on sigterm
-    std::signal(SIGTERM, [](int) {
-        std::cout << "sigterm" << std::endl;
-        mustTerminateSignal = true;
-    });
 
     controlThread = std::thread([this]() {
+        // Initialize signal to stop recording on sigterm
+        std::signal(SIGTERM, [](int) {
+            std::cout << "sigterm" << std::endl;
+            mustTerminateSignal = true;
+        });
+
         while (!mustTerminateSignal) {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
@@ -323,4 +329,8 @@ RecordingService::RecordingService(const std::string &videoAddress, const std::s
             std::cout << "exited" << std::endl;
         }
     });
+}
+
+void RecordingService::wait_recording() {
+    controlThread.join();
 }

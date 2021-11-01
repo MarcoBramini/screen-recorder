@@ -39,8 +39,7 @@ int main() {
     RecordingService rs = RecordingService(videoAddress, audioAddress, "output.mp4");
     rs.start_recording();
 
-    std::this_thread::sleep_for(std::chrono::seconds(10));
-    rs.stop_recording();
+    rs.wait_recording();
 
     return 0;
 }
