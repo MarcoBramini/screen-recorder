@@ -4,6 +4,7 @@
 #include <csignal>
 #include <map>
 #include <fmt/core.h>
+#include "device_context.h"
 
 static bool mustTerminateSignal = false;
 
@@ -278,27 +279,30 @@ RecordingService::RecordingService(const std::string &videoAddress, const std::s
 
     // Open A/V devices
     if (videoDeviceID == audioDeviceID) {
-        inputAvfc = init_input_device(videoDeviceID, videoURL, audioURL, get_device_options(videoDeviceID));
-        inputAuxAvfc = inputAvfc; // The auxiliary device context is the same because we only use one device for A/V
+        inputDevices.push_back(
+                DeviceContext::init_demuxer(videoDeviceID, videoURL, audioURL, get_device_options(videoDeviceID)));
     } else {
-        inputAvfc = init_input_device(videoDeviceID, videoURL, "", get_device_options(videoDeviceID));
-        inputAuxAvfc = init_input_device(audioDeviceID, "", audioURL, get_device_options(audioDeviceID));
+        inputDevices.push_back(
+                DeviceContext::init_demuxer(videoDeviceID, videoURL, "", get_device_options(videoDeviceID)));
+        inputDevices.push_back(
+                DeviceContext::init_demuxer(audioDeviceID, "", audioURL, get_device_options(audioDeviceID)));
     }
 
-    // Get video stream
-    init_video_input_stream(inputAvfc, &inputVideoAvs, &inputVideoAvc);
+    // Open output device
+    EncoderConfig videoEncoderConfig = {.codecID = AV_CODEC_ID_H264,
+            .codecType = AVMEDIA_TYPE_VIDEO,
+            .bitRate = OUTPUT_VIDEO_BIT_RATE,
+            .height = OUTPUT_HEIGHT,
+            .width = OUTPUT_WIDTH,
+            .pixelFormat = OUTPUT_VIDEO_PIXEL_FMT,
+            .frameRate = OUTPUT_VIDEO_FRAME_RATE};
 
-    // Open video decoder
-    init_input_stream_decoder(inputVideoAvs, &inputVideoAvc, &inputVideoAvcc);
-
-    // Get audio stream
-    init_audio_input_stream(inputAuxAvfc, &inputAudioAvs, &inputAudioAvc);
-
-    // Open audio decoder
-    init_input_stream_decoder(inputAudioAvs, &inputAudioAvc, &inputAudioAvcc);
-
-    // Open output file
-    outputAvfc = init_output_context_and_file(outputFilename);
+    EncoderConfig audioEncoderConfig = {.codecID = AV_CODEC_ID_AAC,
+            .codecType = AVMEDIA_TYPE_AUDIO,
+            .bitRate = OUTPUT_AUDIO_BIT_RATE,
+            .channels=
+            };
+    outputMuxer = DeviceContext::init_muxer(outputFilename, videoEncoderConfig, {});
 
     // Initialize output streams
     init_output_stream(outputAvfc, &outputVideoAvs);
