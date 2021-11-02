@@ -53,7 +53,6 @@ class RecordingService {
     std::thread recordingStatsThread;
     std::thread controlThread;
 
-
     // ------
     // Input
     // ------

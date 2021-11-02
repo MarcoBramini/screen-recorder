@@ -35,13 +35,20 @@ add_executable(pds_screen_recording
         src/recording_service/device_context.h
         src/recording_service/stream_context.cpp
         src/recording_service/stream_context.h
-        ${FILES}
         src/recording_service/error.cpp
         src/recording_service/error.h
         src/recording_service/process_chain/process_chain.cpp
         src/recording_service/process_chain/process_chain.h
         src/recording_service/process_chain/decoder_ring.cpp
-        src/recording_service/process_chain/decoder_ring.h src/recording_service/process_chain/muxer_ring.cpp src/recording_service/process_chain/muxer_ring.h src/recording_service/process_chain/encoder_ring.cpp src/recording_service/process_chain/encoder_ring.h src/recording_service/process_chain/filter_ring.cpp src/recording_service/process_chain/filter_ring.h)
+        src/recording_service/process_chain/decoder_ring.h
+        src/recording_service/process_chain/muxer_ring.cpp
+        src/recording_service/process_chain/muxer_ring.h
+        src/recording_service/process_chain/encoder_ring.cpp
+        src/recording_service/process_chain/encoder_ring.h
+        src/recording_service/process_chain/filter_ring.cpp
+        src/recording_service/process_chain/filter_ring.h
+        ${FILES})
+
 
 target_link_libraries(pds_screen_recording avdevice)
 target_link_libraries(pds_screen_recording avformat)

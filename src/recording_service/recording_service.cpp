@@ -270,7 +270,7 @@ int RecordingService::stop_recording() {
 ///       videoAddress:"dshow:...."
 ///       audioAddress:"dshow:...."
 RecordingService::RecordingService(const std::string &videoAddress, const std::string &audioAddress,
-                                   const std::string &outputFilename){
+                                   const std::string &outputFilename) {
     recordingStatus = IDLE;
 
     // Initialize the LibAV devices
