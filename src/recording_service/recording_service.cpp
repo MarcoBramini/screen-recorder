@@ -5,6 +5,10 @@
 #include <map>
 #include <fmt/core.h>
 #include "device_context.h"
+#include "process_chain/encoder_ring.h"
+#include "process_chain/decoder_ring.h"
+#include "process_chain/muxer_ring.h"
+#include "process_chain/process_chain.h"
 
 static bool mustTerminateSignal = false;
 
@@ -204,7 +208,7 @@ int RecordingService::stop_recording() {
     if (encode_video(0, nullptr)) return -1;
     if (encode_audio_from_buffer(0, true)) return -1;
 
-    if (av_write_trailer(outputAvfc) < 0) {
+    /*if (av_write_trailer(outputAvfc) < 0) {
         std::cout << "write error" << std::endl;
         return -1;
     }
@@ -246,7 +250,7 @@ int RecordingService::stop_recording() {
 
     av_audio_fifo_free(audioConverterBuffer);
     audioConverterBuffer = nullptr;
-
+*/
 
     return 0;
 }
@@ -266,7 +270,7 @@ int RecordingService::stop_recording() {
 ///       videoAddress:"dshow:...."
 ///       audioAddress:"dshow:...."
 RecordingService::RecordingService(const std::string &videoAddress, const std::string &audioAddress,
-                                   const std::string &outputFilename) {
+                                   const std::string &outputFilename){
     recordingStatus = IDLE;
 
     // Initialize the LibAV devices
@@ -277,46 +281,57 @@ RecordingService::RecordingService(const std::string &videoAddress, const std::s
     std::tie(videoDeviceID, videoURL) = unpackDeviceAddress(videoAddress);
     std::tie(audioDeviceID, audioURL) = unpackDeviceAddress(audioAddress);
 
-    // Open A/V devices
+    // Open A/V devices (demuxers)
     if (videoDeviceID == audioDeviceID) {
-        inputDevices.push_back(
-                DeviceContext::init_demuxer(videoDeviceID, videoURL, audioURL, get_device_options(videoDeviceID)));
+        mainDevice = DeviceContext::init_demuxer(videoDeviceID, videoURL, audioURL, get_device_options(videoDeviceID));
+        auxDevice = mainDevice;
     } else {
-        inputDevices.push_back(
-                DeviceContext::init_demuxer(videoDeviceID, videoURL, "", get_device_options(videoDeviceID)));
-        inputDevices.push_back(
-                DeviceContext::init_demuxer(audioDeviceID, "", audioURL, get_device_options(audioDeviceID)));
+        mainDevice = DeviceContext::init_demuxer(videoDeviceID, videoURL, "", get_device_options(videoDeviceID));
+        auxDevice = DeviceContext::init_demuxer(audioDeviceID, "", audioURL, get_device_options(audioDeviceID));
     }
 
-    // Open output device
+    // Init muxer
+    outputMuxer = DeviceContext::init_muxer(outputFilename);
+
+    // Init video rings
+    DecoderChainRing videoDecoderRing = DecoderChainRing(mainDevice.getVideoStream().value());
+    std::vector<FilterChainRing> videoFilterRings = {};
     EncoderConfig videoEncoderConfig = {.codecID = AV_CODEC_ID_H264,
             .codecType = AVMEDIA_TYPE_VIDEO,
             .bitRate = OUTPUT_VIDEO_BIT_RATE,
             .height = OUTPUT_HEIGHT,
             .width = OUTPUT_WIDTH,
             .pixelFormat = OUTPUT_VIDEO_PIXEL_FMT,
-            .frameRate = OUTPUT_VIDEO_FRAME_RATE};
+            .frameRate = av_guess_frame_rate(mainDevice.getContext(),
+                                             mainDevice.getVideoStream()->getStream(), nullptr).num};
 
+    EncoderChainRing videoEncoderRing = EncoderChainRing(mainDevice.getVideoStream().value(),
+                                                         outputMuxer.getVideoStream().value(), videoEncoderConfig);
+
+    // Init audio rings
+    DecoderChainRing audioDecoderRing = DecoderChainRing(auxDevice.getAudioStream().value());
+    std::vector<FilterChainRing> audioFilterRings = {};
+    int channels = auxDevice.getAudioStream()->getStream()->codecpar->channels;
     EncoderConfig audioEncoderConfig = {.codecID = AV_CODEC_ID_AAC,
             .codecType = AVMEDIA_TYPE_AUDIO,
             .bitRate = OUTPUT_AUDIO_BIT_RATE,
-            .channels=
-            };
-    outputMuxer = DeviceContext::init_muxer(outputFilename, videoEncoderConfig, {});
+            .channels= channels,
+            .channelLayout = av_get_default_channel_layout(channels),
+            .sampleRate = auxDevice.getAudioStream()->getStream()->codecpar->sample_rate,
+            .sampleFormat = OUTPUT_AUDIO_SAMPLE_FMT,
+            .strictStdCompliance = FF_COMPLIANCE_NORMAL
+    };
+    EncoderChainRing audioEncoderRing = EncoderChainRing(auxDevice.getAudioStream().value(),
+                                                         outputMuxer.getAudioStream().value(), audioEncoderConfig);
 
-    // Initialize output streams
-    init_output_stream(outputAvfc, &outputVideoAvs);
-    init_output_stream(outputAvfc, &outputAudioAvs);
+    // Init common rings
+    auto muxerRing = MuxerChainRing(outputMuxer);
 
-    // Initialize output encoders
-    init_video_encoder(inputAvfc, inputVideoAvs, outputVideoAvs, &outputVideoAvc, &outputVideoAvcc);
-    init_audio_encoder(inputAudioAvcc, outputAudioAvs, &outputAudioAvc, &outputAudioAvcc);
+    // Init transcode process chains
+    this->videoTranscodeChain = ProcessChain(videoDecoderRing, videoFilterRings, videoEncoderRing, muxerRing);
+    this->audioTranscodeChain = ProcessChain(audioDecoderRing, audioFilterRings, audioEncoderRing, muxerRing);
 
-    // Initialize output converters
-    init_video_converter(inputVideoAvcc, outputVideoAvcc, &videoConverter);
-    init_audio_converter(inputAudioAvcc, outputAudioAvcc, &audioConverter, &audioConverterBuffer);
-
-
+    // Init control thread
     controlThread = std::thread([this]() {
         // Initialize signal to stop recording on sigterm
         std::signal(SIGTERM, [](int) {

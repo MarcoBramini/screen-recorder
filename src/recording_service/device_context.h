@@ -17,7 +17,9 @@ extern "C" {
 
 
 class DeviceContext {
-
+    AVFormatContext *avfc;
+    std::optional<StreamContext> videoStream;
+    std::optional<StreamContext> audioStream;
 
     static AVFormatContext *init_input_device(const std::string &deviceID, const std::string &videoURL,
                                               const std::string &audioURL,
@@ -28,16 +30,18 @@ class DeviceContext {
     static AVFormatContext *init_output_context(const std::string &outputFileName);
 
 public:
-    AVFormatContext *avfc;
-    std::vector<StreamContext> streams;
-
     static DeviceContext
     init_demuxer(const std::string &deviceID, const std::string &videoURL, const std::string &audioURL,
                  const std::map<std::string, std::string> &optionsMap);
 
 
-    static DeviceContext init_muxer(const std::string &outputFileName, const EncoderConfig &videoEncoderConfig,
-                                    const EncoderConfig &audioEncoderConfig);
+    static DeviceContext init_muxer(const std::string &outputFileName);
+
+    AVFormatContext *getContext() { return this->avfc; };
+
+    std::optional<StreamContext> getVideoStream() { return this->videoStream; };
+
+    std::optional<StreamContext> getAudioStream() { return this->audioStream; };
 };
 
 

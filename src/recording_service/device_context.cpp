@@ -5,32 +5,30 @@
 DeviceContext DeviceContext::init_demuxer(const std::string &deviceID, const std::string &videoURL,
                                           const std::string &audioURL,
                                           const std::map<std::string, std::string> &optionsMap) {
-    DeviceContext deviceContext;
+    DeviceContext deviceContext{};
     deviceContext.avfc = init_input_device(deviceID, videoURL, audioURL, optionsMap);
 
     if (!videoURL.empty()) {
         int videoStreamID = deviceContext.find_main_stream(AVMEDIA_TYPE_VIDEO);
-        deviceContext.streams.push_back(StreamContext::from_input_stream(deviceContext.avfc->streams[videoStreamID]));
+        deviceContext.videoStream = StreamContext::from_input_stream(deviceContext.avfc->streams[videoStreamID]);
     }
 
     if (!audioURL.empty()) {
         int audioStreamID = deviceContext.find_main_stream(AVMEDIA_TYPE_AUDIO);
-        deviceContext.streams.push_back(StreamContext::from_input_stream(deviceContext.avfc->streams[audioStreamID]));
+        deviceContext.audioStream = StreamContext::from_input_stream(deviceContext.avfc->streams[audioStreamID]);
     }
     return deviceContext;
 }
 
-DeviceContext DeviceContext::init_muxer(const std::string &outputFileName,
-                                        const EncoderConfig &videoEncoderConfig,
-                                        const EncoderConfig &audioEncoderConfig) {
+DeviceContext DeviceContext::init_muxer(const std::string &outputFileName) {
     DeviceContext deviceContext;
 
     deviceContext.avfc = init_output_context(outputFileName);
 
     // Add new output video stream
-    deviceContext.streams.push_back(StreamContext::new_output_stream(deviceContext.avfc, videoEncoderConfig));
+    deviceContext.videoStream = StreamContext::new_output_stream(deviceContext.avfc);
     // Add new output audio stream
-    deviceContext.streams.push_back(StreamContext::new_output_stream(deviceContext.avfc, audioEncoderConfig));
+    deviceContext.audioStream = StreamContext::new_output_stream(deviceContext.avfc);
 
     return deviceContext;
 }

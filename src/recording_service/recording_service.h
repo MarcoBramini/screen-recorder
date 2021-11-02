@@ -8,6 +8,7 @@
 #include <queue>
 #include <map>
 #include "device_context.h"
+#include "process_chain/process_chain.h"
 
 extern "C" {
 #include <libavdevice/avdevice.h>
@@ -52,30 +53,25 @@ class RecordingService {
     std::thread recordingStatsThread;
     std::thread controlThread;
 
-    // ----------------
-    // Processing queue
-    // ----------------
-
-    std::queue<std::tuple<AVPacket *, int64_t, AVMediaType>> capturedVideoPacketsQueue;
-    std::queue<std::tuple<AVPacket *, int64_t, AVMediaType>> capturedAudioPacketsQueue;
 
     // ------
     // Input
     // ------
 
     // Input context
-    std::vector<DeviceContext> inputDevices;
+    DeviceContext mainDevice;
+    DeviceContext auxDevice;
 
-    // ----------
-    // Converters
-    // ----------
-
-    // Video converter
-    SwsContext *videoConverter;
-
-    // Audio converter
-    SwrContext *audioConverter;
-    AVAudioFifo *audioConverterBuffer;
+//    // ----------
+//    // Converters
+//    // ----------
+//
+//    // Video converter
+//    SwsContext *videoConverter;
+//
+//    // Audio converter
+//    SwrContext *audioConverter;
+//    AVAudioFifo *audioConverterBuffer;
 
     // ------
     // Output
@@ -83,6 +79,13 @@ class RecordingService {
 
     // Output context
     DeviceContext outputMuxer;
+
+    // ---------------
+    // Transcode Chain
+    // ---------------
+
+    ProcessChain videoTranscodeChain;
+    ProcessChain audioTranscodeChain;
 
     // recording_utils.cpp
     static std::map<std::string, std::string> get_device_options(const std::string &deviceID);
