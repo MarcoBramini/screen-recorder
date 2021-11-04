@@ -38,3 +38,8 @@ void ProcessChain::enqueueSourcePacket(AVPacket *p, int64_t pts) {
     sourceQueue.emplace(processContext);
 }
 
+void ProcessChain::flush(){
+    // TODO: Flush everything else
+    encoderRing->flush();
+}
+

@@ -170,9 +170,8 @@ int RecordingService::stop_recording() {
     if (recordingStatsThread.joinable())
         recordingStatsThread.join();
 
-
-    /*if (encode_video(0, nullptr)) return -1;
-    if (encode_audio_from_buffer(0, true)) return -1;*/
+    videoTranscodeChain->flush();
+    audioTranscodeChain->flush();
 
     if (av_write_trailer(outputMuxer->getContext()) < 0) {
         std::cout << "write error" << std::endl;

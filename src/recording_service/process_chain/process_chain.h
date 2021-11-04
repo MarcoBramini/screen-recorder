@@ -35,6 +35,8 @@ public:
     void enqueueSourcePacket(AVPacket *p, int64_t pts);
 
     bool isSourceQueueEmpty(){return this->sourceQueue.empty();};
+
+    void flush();
 };
 
 

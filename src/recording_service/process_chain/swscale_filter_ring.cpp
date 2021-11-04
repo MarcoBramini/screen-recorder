@@ -16,8 +16,10 @@ void SWScaleFilterRing::execute(ProcessContext* processContext, AVFrame *inputFr
     convertedFrame->format = config.outputPixelFormat;
     convertedFrame->width = config.outputWidth;
     convertedFrame->height = config.outputHeight;
-    av_frame_get_buffer(convertedFrame, 0);
-
+    int ret = av_frame_get_buffer(convertedFrame, 0);
+    if (ret < 0 ){
+        throw "aaaa";
+    }
     if (sws_scale(swsContext, inputFrame->data, inputFrame->linesize, 0, inputFrame->height,
                   convertedFrame->data, convertedFrame->linesize) < 0) {
         throw std::runtime_error("failed converting video frame");

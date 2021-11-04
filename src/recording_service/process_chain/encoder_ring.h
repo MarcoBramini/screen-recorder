@@ -48,6 +48,8 @@ public:
     void setNext(MuxerChainRing *ring) { this->next = ring; };
 
     AVCodecContext* getEncoderContext(){return this->encoderContext;};
+
+    void flush();
 };
 
 

@@ -89,11 +89,17 @@ void EncoderChainRing::init_encoder(const EncoderConfig &config) {
     }
 }
 
+void EncoderChainRing::flush(){
+    execute(nullptr, nullptr);
+}
+
 void EncoderChainRing::execute(ProcessContext* processContext, AVFrame *inputFrame) {
     // Calculate frame PTS
-    inputFrame->pts = av_rescale_q(processContext->sourcePacketPts,
-                                   inputStream->time_base,
-                                   encoderContext->time_base);
+    if (processContext) { // Are we flushing?
+        inputFrame->pts = av_rescale_q(processContext->sourcePacketPts,
+                                       inputStream->time_base,
+                                       encoderContext->time_base);
+    }
 
     AVPacket *encodedPacket = av_packet_alloc();
     if (!encodedPacket) {
