@@ -4,6 +4,7 @@
 #include "encoder_ring.h"
 #include "filter_ring.h"
 #include "process_context.h"
+#include <variant>
 
 extern "C" {
 #include "libavformat/avformat.h"

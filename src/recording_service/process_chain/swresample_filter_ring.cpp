@@ -90,6 +90,7 @@ void SWResampleFilterRing::execute(ProcessContext* processContext, AVFrame *inpu
         }
 
         av_frame_unref(convertedFrame);
-        av_frame_free(&convertedFrame);
     }
+        av_frame_free(&convertedFrame);
+
 }

@@ -12,7 +12,7 @@ std::map<std::string, std::string> RecordingService::get_device_options(const st
 
     if (deviceID == "x11grab") {
         return {{"framerate",  std::to_string(OUTPUT_VIDEO_FRAME_RATE)},
-                {"video_size", "1000x500"}};
+                {"video_size", "1680x900"}};
     }
 
     if (deviceID == "pulse") {

@@ -56,7 +56,7 @@ int RecordingService::start_capture_loop(DeviceContext *inputDevice) {
                 enqueue_video_packet(inputDevice, &inputPacket);
                 break;
             case AVMEDIA_TYPE_AUDIO:
-                //enqueue_audio_packet(inputDevice, &inputPacket);
+                enqueue_audio_packet(inputDevice, &inputPacket);
                 break;
             default:
                 throw std::runtime_error(
@@ -304,12 +304,12 @@ RecordingService::RecordingService(const std::string &videoAddress, const std::s
 
     SWResampleConfig swResampleConfig = {
             .inputChannels =audioDecoderRing->getDecoderContext()->channels,
-            .inputChannelLayout= audioDecoderRing->getDecoderContext()->channel_layout,
+            .inputChannelLayout= av_get_default_channel_layout(channels),
             .inputSampleFormat= audioDecoderRing->getDecoderContext()->sample_fmt,
             .inputSampleRate= audioDecoderRing->getDecoderContext()->sample_rate,
             .inputFrameSize= audioDecoderRing->getDecoderContext()->frame_size,
             .outputChannels=  audioEncoderRing->getEncoderContext()->channels,
-            .outputChannelLayout= audioEncoderRing->getEncoderContext()->channel_layout,
+            .outputChannelLayout= av_get_default_channel_layout(channels),
             .outputSampleFormat= audioEncoderRing->getEncoderContext()->sample_fmt,
             .outputSampleRate= audioEncoderRing->getEncoderContext()->sample_rate,
             .outputFrameSize= audioEncoderRing->getEncoderContext()->frame_size,
@@ -327,7 +327,7 @@ RecordingService::RecordingService(const std::string &videoAddress, const std::s
     // Init control thread
     controlThread = std::thread([this]() {
         // Initialize signal to stop recording on sigterm
-        std::signal(SIGTERM, [](int) {
+        std::signal(SIGINT, [](int) {
             std::cout << "sigterm" << std::endl;
             mustTerminateSignal = true;
         });

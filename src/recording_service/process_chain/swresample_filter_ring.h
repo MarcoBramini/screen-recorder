@@ -13,12 +13,12 @@ extern "C" {
 
 struct SWResampleConfig {
     int inputChannels;
-    uint64_t inputChannelLayout;
+    int64_t inputChannelLayout;
     AVSampleFormat inputSampleFormat;
     int inputSampleRate;
     int inputFrameSize;
     int outputChannels;
-    uint64_t outputChannelLayout;
+    int64_t outputChannelLayout;
     AVSampleFormat outputSampleFormat;
     int outputSampleRate;
     int outputFrameSize;
