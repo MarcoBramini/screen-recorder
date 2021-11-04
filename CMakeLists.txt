@@ -28,13 +28,9 @@ add_executable(pds_screen_recording
         src/device_service/device_service.h
         src/recording_service/recording_service.cpp
         src/recording_service/recording_service.h
-        src/recording_service/recording_init.cpp
         src/recording_service/recording_utils.cpp
-        src/recording_service/recording_transcode.cpp
         src/recording_service/device_context.cpp
         src/recording_service/device_context.h
-        src/recording_service/stream_context.cpp
-        src/recording_service/stream_context.h
         src/recording_service/error.cpp
         src/recording_service/error.h
         src/recording_service/process_chain/process_chain.cpp
@@ -47,7 +43,13 @@ add_executable(pds_screen_recording
         src/recording_service/process_chain/encoder_ring.h
         src/recording_service/process_chain/filter_ring.cpp
         src/recording_service/process_chain/filter_ring.h
-        ${FILES})
+        ${FILES}
+        src/recording_service/process_chain/process_context.cpp
+        src/recording_service/process_chain/process_context.h
+        src/recording_service/process_chain/swscale_filter_ring.cpp
+        src/recording_service/process_chain/swscale_filter_ring.h
+        src/recording_service/process_chain/swresample_filter_ring.cpp
+        src/recording_service/process_chain/swresample_filter_ring.h)
 
 
 target_link_libraries(pds_screen_recording avdevice)

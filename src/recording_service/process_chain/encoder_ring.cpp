@@ -1,16 +1,13 @@
-//
-// Created by Marco Bramini on 01/11/21.
-//
-
 #include <fmt/core.h>
 #include "encoder_ring.h"
 #include "../error.h"
+#include "process_context.h"
 
 extern "C" {
 #include <libavdevice/avdevice.h>
 }
 
-EncoderChainRing::EncoderChainRing(StreamContext inputStream, StreamContext outputStream, const EncoderConfig &config)
+EncoderChainRing::EncoderChainRing(AVStream * inputStream, AVStream* outputStream, const EncoderConfig &config)
         : inputStream(inputStream), outputStream(outputStream), encoderContext(nullptr), lastEncodedDTS(0),
           next(nullptr) {
 
@@ -24,22 +21,22 @@ void EncoderChainRing::init_encoder(const EncoderConfig &config) {
     AVCodec *avc = avcodec_find_encoder(config.codecID);
     if (!avc) {
         throw std::runtime_error(
-                build_error_message(__FUNCTION__, {}, fmt::format("error finding encoder '{}'", config.codecID)));
+                Error::build_error_message(__FUNCTION__, {}, fmt::format("error finding encoder '{}'", config.codecID)));
     }
 
     // Allocate context for the encoder
     encoderContext = avcodec_alloc_context3(avc);
     if (!encoderContext) {
-        throw std::runtime_error(build_error_message(__FUNCTION__, {}, "error allocating context for the encoder"));
+        throw std::runtime_error(Error::build_error_message(__FUNCTION__, {}, "error allocating context for the encoder"));
     }
 
     int ret;
     for (const auto &option:config.encoderOptions) {
         ret = av_opt_set(encoderContext->priv_data, option.first.c_str(), option.second.c_str(), 0);
         if (ret < 0) {
-            throw std::runtime_error(build_error_message(__FUNCTION__, {}, fmt::format(
+            throw std::runtime_error(Error::build_error_message(__FUNCTION__, {}, fmt::format(
                     "error setting '{}' encoder option to value '{}' ({})",
-                    option.first, option.second, unpackAVError(ret))));
+                    option.first, option.second, Error::unpackAVError(ret))));
         }
     }
 
@@ -51,11 +48,12 @@ void EncoderChainRing::init_encoder(const EncoderConfig &config) {
             encoderContext->bit_rate = config.bitRate;
             encoderContext->framerate = {config.frameRate, 1};
             encoderContext->time_base = {1, config.frameRate};
+            encoderContext->sample_aspect_ratio = inputStream->codecpar->sample_aspect_ratio;
             break;
         case AVMEDIA_TYPE_AUDIO:
         default:
             encoderContext->channels = config.channels;
-            encoderContext->channel_layout = config.channels;
+            encoderContext->channel_layout = config.channelLayout;
             encoderContext->sample_rate = config.sampleRate;
             encoderContext->sample_fmt = config.sampleFormat;
             encoderContext->bit_rate = config.bitRate;
@@ -79,22 +77,27 @@ void EncoderChainRing::init_encoder(const EncoderConfig &config) {
     ret = avcodec_open2(encoderContext, avc, nullptr);
     if (ret < 0) {
         throw std::runtime_error(
-                build_error_message(__FUNCTION__, {}, fmt::format("error opening encoder ({})", unpackAVError(ret))));
+                Error::build_error_message(__FUNCTION__, {}, fmt::format("error opening encoder ({})", Error::unpackAVError(ret))));
     }
 
     // Copy encoder parameter to stream
-    ret = avcodec_parameters_from_context(inputStream.getStream()->codecpar, encoderContext);
+    ret = avcodec_parameters_from_context(outputStream->codecpar, encoderContext);
     if (ret < 0) {
-        throw std::runtime_error(build_error_message(__FUNCTION__, {},
+        throw std::runtime_error(Error::build_error_message(__FUNCTION__, {},
                                                      fmt::format("error copying encoder parameters to the stream ({})",
-                                                                 unpackAVError(ret))));
+                                                                 Error::unpackAVError(ret))));
     }
 }
 
-void EncoderChainRing::execute(AVFrame *inputFrame) {
+void EncoderChainRing::execute(ProcessContext* processContext, AVFrame *inputFrame) {
+    // Calculate frame PTS
+    inputFrame->pts = av_rescale_q(processContext->sourcePacketPts,
+                                   inputStream->time_base,
+                                   encoderContext->time_base);
+
     AVPacket *encodedPacket = av_packet_alloc();
     if (!encodedPacket) {
-        throw std::runtime_error(build_error_message(__FUNCTION__, {}, "error allocating packet"));
+        throw std::runtime_error(Error::build_error_message(__FUNCTION__, {}, "error allocating packet"));
     }
 
     int response = avcodec_send_frame(encoderContext, inputFrame);
@@ -104,19 +107,19 @@ void EncoderChainRing::execute(AVFrame *inputFrame) {
         if (response == AVERROR(EAGAIN) || response == AVERROR_EOF) {
             break;
         } else if (response < 0) {
-            throw std::runtime_error(build_error_message(__FUNCTION__, {}, "error receiving packet from the encoder"));
+            throw std::runtime_error(Error::build_error_message(__FUNCTION__, {}, "error receiving packet from the encoder"));
         }
 
-        encodedPacket->stream_index = outputStream.getStream()->index;
+        encodedPacket->stream_index = outputStream->index;
 
-        av_packet_rescale_ts(encodedPacket, encoderContext->time_base, outputStream.getStream()->time_base);
+        av_packet_rescale_ts(encodedPacket, encoderContext->time_base, outputStream->time_base);
 
         if (encodedPacket->dts <= lastEncodedDTS) {
             continue;
         }
         lastEncodedDTS = encodedPacket->dts;
 
-        next->execute(encodedPacket);
+        next->execute(processContext, encodedPacket);
     }
     av_packet_unref(encodedPacket);
     av_packet_free(&encodedPacket);

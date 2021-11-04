@@ -22,7 +22,7 @@ extern "C" {
 // Settings
 const AVSampleFormat OUTPUT_AUDIO_SAMPLE_FMT = AV_SAMPLE_FMT_FLTP;
 const AVPixelFormat OUTPUT_VIDEO_PIXEL_FMT = AV_PIX_FMT_YUV420P;
-const int64_t OUTPUT_VIDEO_BIT_RATE = 1000000;
+const int64_t OUTPUT_VIDEO_BIT_RATE = 2500000;
 const int64_t OUTPUT_AUDIO_BIT_RATE = 96000;
 const int OUTPUT_HEIGHT = 1080;
 const int OUTPUT_WIDTH = 1920;
@@ -58,64 +58,32 @@ class RecordingService {
     // ------
 
     // Input context
-    DeviceContext mainDevice;
-    DeviceContext auxDevice;
-
-//    // ----------
-//    // Converters
-//    // ----------
-//
-//    // Video converter
-//    SwsContext *videoConverter;
-//
-//    // Audio converter
-//    SwrContext *audioConverter;
-//    AVAudioFifo *audioConverterBuffer;
+    DeviceContext* mainDevice;
+    DeviceContext* auxDevice;
 
     // ------
     // Output
     // ------
 
     // Output context
-    DeviceContext outputMuxer;
+    DeviceContext* outputMuxer;
 
     // ---------------
     // Transcode Chain
     // ---------------
 
-    ProcessChain videoTranscodeChain;
-    ProcessChain audioTranscodeChain;
+    ProcessChain* videoTranscodeChain;
+    ProcessChain* audioTranscodeChain;
 
     // recording_utils.cpp
     static std::map<std::string, std::string> get_device_options(const std::string &deviceID);
 
     static std::tuple<std::string, std::string> unpackDeviceAddress(const std::string &deviceAddress);
 
-
-    // recording_init.cpp
-    static void
-    init_video_converter(AVCodecContext *inputVideoAvcc, AVCodecContext *outputVideoAvcc, SwsContext **videoConverter);
-
-    static void
-    init_audio_converter(AVCodecContext *inputAudioAvcc, AVCodecContext *outputAudioAvcc, SwrContext **audioConverter,
-                         AVAudioFifo **audioConverterBuffer);
-
     // recording_service.cpp
-    int start_capture_loop(bool readFromAux);
+    int start_capture_loop(DeviceContext* inputDevice);
 
-    int process_captured_packets_queue(bool readFromAux);
-
-    int encode_audio_from_buffer(int64_t framePts, bool shouldFlush);
-
-    int encode_video(int64_t framePts, AVFrame *videoInputFrame);
-
-    int transcode_video(AVPacket *videoInputPacket, int64_t packetPts);
-
-    int transcode_audio(AVPacket *audioInputPacket, int64_t packetPts);
-
-    int convert_video(AVFrame *videoInputFrame, AVFrame *videoOutputFrame);
-
-    int convert_audio(AVFrame *audioInputFrame);
+    void start_transcode_process(ProcessChain* transcodeChain);
 
 public:
     RecordingService(const std::string &videoAddress, const std::string &audioAddress,
@@ -129,9 +97,9 @@ public:
 
     int stop_recording();
 
-    void enqueue_video_packet(AVPacket *inputVideoPacket);
+    void enqueue_video_packet(DeviceContext* inputDevice, AVPacket *inputVideoPacket);
 
-    void enqueue_audio_packet(AVPacket *inputAudioPacket);
+    void enqueue_audio_packet(DeviceContext* inputDevice, AVPacket *inputAudioPacket);
 
     void rec_stats_loop();
 

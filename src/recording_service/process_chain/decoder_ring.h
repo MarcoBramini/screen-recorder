@@ -1,14 +1,14 @@
 #ifndef PDS_SCREEN_RECORDING_DECODERING_H
 #define PDS_SCREEN_RECORDING_DECODERING_H
 
-#include "process_ring.h"
 #include "encoder_ring.h"
 #include "filter_ring.h"
+#include "process_context.h"
 
 extern "C" {
 #include "libavformat/avformat.h"
 #include "libavcodec/avcodec.h"
-};
+}
 
 class DecoderChainRing {
     AVCodec *streamCodec;
@@ -17,11 +17,13 @@ class DecoderChainRing {
     std::variant<FilterChainRing *, EncoderChainRing *> next;
 
 public:
-    explicit DecoderChainRing(StreamContext inputStream);
+    explicit DecoderChainRing(AVStream* inputStream);
 
-    void execute(AVPacket *inputPacket);
+    void execute(ProcessContext* processContext);
 
     void setNext(std::variant<FilterChainRing *, EncoderChainRing *> ring) { this->next = ring; };
+
+    AVCodecContext* getDecoderContext(){return this->decoderContext;};
 };
 
 

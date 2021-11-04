@@ -2,33 +2,39 @@
 #include "error.h"
 #include <fmt/core.h>
 
-DeviceContext DeviceContext::init_demuxer(const std::string &deviceID, const std::string &videoURL,
-                                          const std::string &audioURL,
-                                          const std::map<std::string, std::string> &optionsMap) {
-    DeviceContext deviceContext{};
-    deviceContext.avfc = init_input_device(deviceID, videoURL, audioURL, optionsMap);
+DeviceContext *DeviceContext::init_demuxer(const std::string &deviceID, const std::string &videoURL,
+                                           const std::string &audioURL,
+                                           const std::map<std::string, std::string> &optionsMap) {
+    auto *deviceContext = new DeviceContext();
+    deviceContext->avfc = init_input_device(deviceID, videoURL, audioURL, optionsMap);
 
     if (!videoURL.empty()) {
-        int videoStreamID = deviceContext.find_main_stream(AVMEDIA_TYPE_VIDEO);
-        deviceContext.videoStream = StreamContext::from_input_stream(deviceContext.avfc->streams[videoStreamID]);
+        int videoStreamID = deviceContext->find_main_stream(AVMEDIA_TYPE_VIDEO);
+        deviceContext->videoStream = deviceContext->avfc->streams[videoStreamID];
     }
 
     if (!audioURL.empty()) {
-        int audioStreamID = deviceContext.find_main_stream(AVMEDIA_TYPE_AUDIO);
-        deviceContext.audioStream = StreamContext::from_input_stream(deviceContext.avfc->streams[audioStreamID]);
+        int audioStreamID = deviceContext->find_main_stream(AVMEDIA_TYPE_AUDIO);
+        deviceContext->audioStream = deviceContext->avfc->streams[audioStreamID];
     }
     return deviceContext;
 }
 
-DeviceContext DeviceContext::init_muxer(const std::string &outputFileName) {
-    DeviceContext deviceContext;
+DeviceContext *DeviceContext::init_muxer(const std::string &outputFileName) {
+    auto *deviceContext = new DeviceContext();
 
-    deviceContext.avfc = init_output_context(outputFileName);
+    deviceContext->avfc = init_output_context(outputFileName);
 
     // Add new output video stream
-    deviceContext.videoStream = StreamContext::new_output_stream(deviceContext.avfc);
+    deviceContext->videoStream = avformat_new_stream(deviceContext->avfc, nullptr);
+    if (!deviceContext->videoStream) {
+        throw std::runtime_error(Error::build_error_message(__FUNCTION__, {}, "error allocating output AVStream"));
+    }
     // Add new output audio stream
-    deviceContext.audioStream = StreamContext::new_output_stream(deviceContext.avfc);
+    deviceContext->audioStream = avformat_new_stream(deviceContext->avfc, nullptr);
+    if (!deviceContext->audioStream) {
+        throw std::runtime_error(Error::build_error_message(__FUNCTION__, {}, "error allocating output AVStream"));
+    }
 
     return deviceContext;
 }
@@ -47,14 +53,14 @@ AVFormatContext *DeviceContext::init_input_device(const std::string &deviceID, c
     // Allocate a context for the device
     AVFormatContext *ctx = avformat_alloc_context();
     if (!ctx) {
-        throw std::runtime_error(build_error_message(__FUNCTION__, methodParams,
+        throw std::runtime_error(Error::build_error_message(__FUNCTION__, methodParams,
                                                      "error during AVFormatContext allocation"));
     }
 
     // Find the input format associated to the deviceID
     AVInputFormat *inputFormat = av_find_input_format(deviceID.c_str());
     if (!inputFormat) {
-        throw std::runtime_error(build_error_message(__FUNCTION__, methodParams,
+        throw std::runtime_error(Error::build_error_message(__FUNCTION__, methodParams,
                                                      "no AVInputFormat found for deviceID"));
     }
 
@@ -63,9 +69,9 @@ AVFormatContext *DeviceContext::init_input_device(const std::string &deviceID, c
     for (const auto &option:optionsMap) {
         ret = av_dict_set(&options, option.first.c_str(), option.second.c_str(), 0);
         if (ret < 0) {
-            throw std::runtime_error(build_error_message(__FUNCTION__, methodParams,
+            throw std::runtime_error(Error::build_error_message(__FUNCTION__, methodParams,
                                                          fmt::format("error setting '{}' option to value '{}' ({})",
-                                                                     option.first, option.second, unpackAVError(ret))));
+                                                                     option.first, option.second, Error::unpackAVError(ret))));
         }
     }
 
@@ -80,18 +86,18 @@ AVFormatContext *DeviceContext::init_input_device(const std::string &deviceID, c
     }
     ret = avformat_open_input(&ctx, url.c_str(), inputFormat, &options);
     if (ret < 0) {
-        throw std::runtime_error(build_error_message(__FUNCTION__, methodParams,
+        throw std::runtime_error(Error::build_error_message(__FUNCTION__, methodParams,
                                                      fmt::format("error opening input format ({})",
-                                                                 unpackAVError(ret))));
+                                                                 Error::unpackAVError(ret))));
     }
 
     // Find device's streams info
     ctx->probesize = 100000000; // size of the buffer containing the frames used to get streams info
     ret = avformat_find_stream_info(ctx, nullptr);
     if (ret < 0) {
-        throw std::runtime_error(build_error_message(__FUNCTION__, methodParams,
+        throw std::runtime_error(Error::build_error_message(__FUNCTION__, methodParams,
                                                      fmt::format("error finding streams info ({})",
-                                                                 unpackAVError(ret))));
+                                                                 Error::unpackAVError(ret))));
     }
 
     return ctx;
@@ -100,12 +106,12 @@ AVFormatContext *DeviceContext::init_input_device(const std::string &deviceID, c
 /// Finds the main video stream in the current device context.
 int DeviceContext::find_main_stream(AVMediaType streamType) {
     if (avfc == nullptr) {
-        throw std::runtime_error(build_error_message(__FUNCTION__, {}, "device not initialized"));
+        throw std::runtime_error(Error::build_error_message(__FUNCTION__, {}, "device not initialized"));
     }
 
     int streamIndex = av_find_best_stream(avfc, streamType, -1, -1, nullptr, 0);
     if (streamIndex < 0) {
-        throw std::runtime_error(build_error_message(__FUNCTION__, {},
+        throw std::runtime_error(Error::build_error_message(__FUNCTION__, {},
                                                      fmt::format("error finding main stream for type {}", streamType)));
     }
 
@@ -121,9 +127,9 @@ AVFormatContext *DeviceContext::init_output_context(const std::string &outputFil
     AVFormatContext *ctx;
     int ret = avformat_alloc_output_context2(&ctx, nullptr, nullptr, outputFileName.c_str());
     if (ret < 0) {
-        throw std::runtime_error(build_error_message(__FUNCTION__, methodParams,
+        throw std::runtime_error(Error::build_error_message(__FUNCTION__, methodParams,
                                                      fmt::format("error during output AVFormatContext allocation ({})",
-                                                                 unpackAVError(ret))));
+                                                                 Error::unpackAVError(ret))));
     }
 
     if (ctx->oformat->flags & AVFMT_GLOBALHEADER)
@@ -132,8 +138,8 @@ AVFormatContext *DeviceContext::init_output_context(const std::string &outputFil
     if (!(ctx->oformat->flags & AVFMT_NOFILE)) {
         ret = avio_open(&ctx->pb, outputFileName.c_str(), AVIO_FLAG_WRITE);
         if (ret < 0) {
-            throw std::runtime_error(build_error_message(__FUNCTION__, methodParams, fmt::format(
-                    "error opening AVIOContext ({})", unpackAVError(ret))));
+            throw std::runtime_error(Error::build_error_message(__FUNCTION__, methodParams, fmt::format(
+                    "error opening AVIOContext ({})", Error::unpackAVError(ret))));
         }
     }
 

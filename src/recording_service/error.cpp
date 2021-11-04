@@ -5,7 +5,7 @@ extern "C" {
 #include <libavutil/avutil.h>
 }
 
-std::string build_error_message(const std::string &methodName,
+std::string Error::build_error_message(const std::string &methodName,
                                 const std::map<std::string, std::string> &methodParams,
                                 const std::string &errorDescription) {
     // Format method params to string
@@ -20,7 +20,7 @@ std::string build_error_message(const std::string &methodName,
 }
 
 
-std::string unpackAVError(int avErrorCode) {
+std::string Error::unpackAVError(int avErrorCode) {
     char a[AV_ERROR_MAX_STRING_SIZE] = {0};
     return av_make_error_string(a, AV_ERROR_MAX_STRING_SIZE, avErrorCode);
 }

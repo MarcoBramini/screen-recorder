@@ -8,31 +8,33 @@ void ProcessChain::processNext() {
     }
 
     // Get first packet
-    AVPacket *inputPacket;
-    int64_t packetPts;
-    std::tie(inputPacket, packetPts) = sourceQueue.front();
+    ProcessContext *inputPacket = sourceQueue.front();
     sourceQueue.pop();
 
-    decoderRing.execute(inputPacket);
-
-    av_packet_unref(inputPacket);
-    av_packet_free(&inputPacket);
+    decoderRing->execute(inputPacket);
+    delete inputPacket;
 }
 
-ProcessChain::ProcessChain(const DecoderChainRing &decoderRing,
-                           std::vector<FilterChainRing> &filterRings, const EncoderChainRing &encoderRing,
-                           const MuxerChainRing &muxerRing) : decoderRing(decoderRing),
-                                                              filterRings(filterRings), encoderRing(encoderRing),
-                                                              muxerRing(muxerRing) {
+ProcessChain::ProcessChain(DecoderChainRing *decoderRing, std::vector<FilterChainRing *> filterRings,
+                           EncoderChainRing *encoderRing, MuxerChainRing *muxerRing) : decoderRing(decoderRing),
+                                                                                       filterRings(
+                                                                                               std::move(filterRings)),
+                                                                                       encoderRing(encoderRing),
+                                                                                       muxerRing(muxerRing) {
     // Set ring nexts
-    this->decoderRing.setNext(&this->filterRings.front());
+    this->decoderRing->setNext(this->filterRings.front());
 
     int i;
     for (i = 0; i < this->filterRings.size() - 1; i++) {
-        this->filterRings[i].setNext(&this->filterRings[i + 1]);
+        this->filterRings[i]->setNext(this->filterRings[i + 1]);
     }
-    this->filterRings.back().setNext(&this->encoderRing);
+    this->filterRings.back()->setNext(this->encoderRing);
 
-    this->encoderRing.setNext(&this->muxerRing);
+    this->encoderRing->setNext(this->muxerRing);
+}
+
+void ProcessChain::enqueueSourcePacket(AVPacket *p, int64_t pts) {
+    auto *processContext = new ProcessContext(p, pts);
+    sourceQueue.emplace(processContext);
 }
 

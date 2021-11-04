@@ -9,61 +9,58 @@
 #include "process_chain/decoder_ring.h"
 #include "process_chain/muxer_ring.h"
 #include "process_chain/process_chain.h"
+#include "process_chain/swscale_filter_ring.h"
+#include "process_chain/swresample_filter_ring.h"
+#include "error.h"
 
 static bool mustTerminateSignal = false;
 
 int64_t last_video_pts = 0;
 
-void RecordingService::enqueue_video_packet(AVPacket *inputVideoPacket) {
+void RecordingService::enqueue_video_packet(DeviceContext *inputDevice, AVPacket *inputVideoPacket) {
     auto videoPacket = av_packet_clone(inputVideoPacket);
 
-    int64_t pts = av_rescale_q(inputVideoPacket->pts - inputVideoAvs->start_time, inputVideoAvs->time_base,
-                               outputVideoAvcc->time_base);
-
-    capturedVideoPacketsQueue.push(std::make_tuple(videoPacket, pts, AVMEDIA_TYPE_VIDEO));
-    last_video_pts = pts;
+    int64_t relativePts = inputVideoPacket->pts - inputDevice->getVideoStream()->start_time;
+    videoTranscodeChain->enqueueSourcePacket(videoPacket, relativePts);
+    last_video_pts = relativePts;
 }
 
 int64_t last_audio_pts = 0;
 
-void RecordingService::enqueue_audio_packet(AVPacket *inputAudioPacket) {
+void RecordingService::enqueue_audio_packet(DeviceContext *inputDevice, AVPacket *inputAudioPacket) {
     auto audioPacket = av_packet_clone(inputAudioPacket);
 
-    int64_t pts = av_rescale_q(inputAudioPacket->pts - inputAudioAvs->start_time, inputAudioAvs->time_base,
-                               outputAudioAvcc->time_base);
+    int64_t relativePts = inputAudioPacket->pts - inputDevice->getAudioStream()->start_time;
+    audioTranscodeChain->enqueueSourcePacket(audioPacket, relativePts);
 
-    capturedAudioPacketsQueue.push(std::make_tuple(audioPacket, pts, AVMEDIA_TYPE_AUDIO));
-
-    last_audio_pts = pts;
+    last_audio_pts = relativePts;
 }
 
-int RecordingService::start_capture_loop(bool readFromAux) {
-    AVFormatContext *currentAvfc = (!readFromAux) ? inputAvfc : inputAuxAvfc;
-
+int RecordingService::start_capture_loop(DeviceContext *inputDevice) {
     AVPacket inputPacket;
     while (recordingStatus == RECORDING) {
-        int ret = av_read_frame(currentAvfc, &inputPacket);
+        int ret = av_read_frame(inputDevice->getContext(), &inputPacket);
         if (ret == AVERROR(EAGAIN))
             continue;
 
         if (ret < 0) {
             std::string error = "Capture failed with:";
-            error.append(unpackAVError(ret));
+            error.append(Error::unpackAVError(ret));
             throw std::runtime_error(error);
         }
 
-        AVMediaType packetType = currentAvfc->streams[inputPacket.stream_index]->codecpar->codec_type;
+        AVMediaType packetType = inputDevice->getContext()->streams[inputPacket.stream_index]->codecpar->codec_type;
 
         switch (packetType) {
             case AVMEDIA_TYPE_VIDEO:
-                enqueue_video_packet(&inputPacket);
+                enqueue_video_packet(inputDevice, &inputPacket);
                 break;
             case AVMEDIA_TYPE_AUDIO:
-                enqueue_audio_packet(&inputPacket);
+                //enqueue_audio_packet(inputDevice, &inputPacket);
                 break;
             default:
                 throw std::runtime_error(
-                        build_error_message(__FUNCTION__, {}, fmt::format("unexpected packet type ({})", ret)));
+                        Error::build_error_message(__FUNCTION__, {}, fmt::format("unexpected packet type ({})", ret)));
         }
         av_packet_unref(&inputPacket);
     }
@@ -74,64 +71,37 @@ int RecordingService::start_capture_loop(bool readFromAux) {
 int64_t last_processed_video_pts = 0;
 int64_t last_processed_audio_pts = 0;
 
-int RecordingService::process_captured_packets_queue(bool readFromAux) {
-
-    auto *currentQueue = (!readFromAux) ? &capturedVideoPacketsQueue : &capturedAudioPacketsQueue;
+void RecordingService::start_transcode_process(ProcessChain *transcodeChain) {
 
     while (true) {
 
-        if (currentQueue->empty()) {
+        if (transcodeChain->isSourceQueueEmpty()) {
             if (recordingStatus == RECORDING)
                 continue;
             break;
         }
 
-        AVPacket *packet;
-        int64_t packetPts;
-        AVMediaType packetType;
-        std::tie(packet, packetPts, packetType) = currentQueue->front();
-        currentQueue->pop();
-
-        int ret;
-        switch (packetType) {
-            case AVMEDIA_TYPE_VIDEO:
-                ret = transcode_video(packet, packetPts);
-                last_processed_video_pts = packetPts;
-                break;
-            case AVMEDIA_TYPE_AUDIO:
-                ret = transcode_audio(packet, packetPts);
-                last_processed_audio_pts = packetPts;
-                break;
-            default:
-                throw std::runtime_error(
-                        build_error_message(__FUNCTION__, {}, fmt::format("unexpected packet type ({})", packetType)));
-        }
-        if (ret < 0) {
-            // Handle
-            return -1;
-        }
-
-        av_packet_unref(packet);
+        transcodeChain->processNext();
     }
-    return 0;
 }
 
 void RecordingService::rec_stats_loop() {
     while (recordingStatus == RECORDING) {
         std::this_thread::sleep_for(std::chrono::milliseconds(300));
-        std::cout << "\r Packet Queue Size: " << capturedVideoPacketsQueue.size()
+        /*std::cout << "\r Packet Queue Size: " << capturedVideoPacketsQueue.size()
                   << "Last Captured PTS - video: "
                   << av_rescale_q(last_video_pts, outputVideoAvcc->time_base, {1, 1000}) << " audio: "
                   << av_rescale_q(last_audio_pts, outputAudioAvcc->time_base, {1, 1000})
                   << "Last Processed PTS - video: "
                   << av_rescale_q(last_processed_video_pts, outputVideoAvcc->time_base, {1, 1000}) << " audio: "
-                  << av_rescale_q(last_processed_audio_pts, outputAudioAvcc->time_base, {1, 1000});
+                  << av_rescale_q(last_processed_audio_pts, outputAudioAvcc->time_base, {1, 1000});*/
     }
 }
 
 int RecordingService::start_recording() {
     // Write output file header
-    if (avformat_write_header(outputAvfc, nullptr) < 0) {
+    int ret = avformat_write_header(outputMuxer->getContext(), nullptr);
+    if (ret < 0) {
         //Handle
         return -1;
     }
@@ -140,24 +110,22 @@ int RecordingService::start_recording() {
 
     // Call start_recording_loop in a new thread
     videoCaptureThread = std::thread([this]() {
-        start_capture_loop(false);
+        start_capture_loop(mainDevice);
     });
 
-    if (inputAvfc != inputAuxAvfc) {
+    if (mainDevice != auxDevice) {
         audioCaptureThread = std::thread([this]() {
-            start_capture_loop(true);
+            start_capture_loop(auxDevice);
         });
     }
 
-
     capturedVideoPacketsProcessThread = std::thread([this]() {
-        process_captured_packets_queue(false);
+        start_transcode_process(videoTranscodeChain);
     });
 
     capturedAudioPacketsProcessThread = std::thread([this]() {
-        process_captured_packets_queue(true);
+        start_transcode_process(audioTranscodeChain);
     });
-
 
     recordingStatsThread = std::thread([this]() {
         rec_stats_loop();
@@ -187,8 +155,6 @@ int RecordingService::stop_recording() {
     if (recordingStatus == IDLE || recordingStatus == STOP) return 0;
     recordingStatus = STOP;
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
-
     if (videoCaptureThread.joinable())
         videoCaptureThread.join();
 
@@ -205,13 +171,13 @@ int RecordingService::stop_recording() {
         recordingStatsThread.join();
 
 
-    if (encode_video(0, nullptr)) return -1;
-    if (encode_audio_from_buffer(0, true)) return -1;
+    /*if (encode_video(0, nullptr)) return -1;
+    if (encode_audio_from_buffer(0, true)) return -1;*/
 
-    /*if (av_write_trailer(outputAvfc) < 0) {
+    if (av_write_trailer(outputMuxer->getContext()) < 0) {
         std::cout << "write error" << std::endl;
         return -1;
-    }
+    }/*
 
     if (inputAvfc != inputAuxAvfc) {
         avformat_close_input(&inputAuxAvfc);
@@ -294,42 +260,70 @@ RecordingService::RecordingService(const std::string &videoAddress, const std::s
     outputMuxer = DeviceContext::init_muxer(outputFilename);
 
     // Init video rings
-    DecoderChainRing videoDecoderRing = DecoderChainRing(mainDevice.getVideoStream().value());
-    std::vector<FilterChainRing> videoFilterRings = {};
+    auto *videoDecoderRing = new DecoderChainRing(mainDevice->getVideoStream());
+
     EncoderConfig videoEncoderConfig = {.codecID = AV_CODEC_ID_H264,
             .codecType = AVMEDIA_TYPE_VIDEO,
+            .encoderOptions = {{"preset",      "ultrafast"},
+                               {"x264-params", "keyint=60:min-keyint=60:scenecut=0:force-cfr=1"},
+                               {"tune",        "zerolatency"}},
             .bitRate = OUTPUT_VIDEO_BIT_RATE,
             .height = OUTPUT_HEIGHT,
             .width = OUTPUT_WIDTH,
             .pixelFormat = OUTPUT_VIDEO_PIXEL_FMT,
-            .frameRate = av_guess_frame_rate(mainDevice.getContext(),
-                                             mainDevice.getVideoStream()->getStream(), nullptr).num};
+            .frameRate = av_guess_frame_rate(mainDevice->getContext(),
+                                             mainDevice->getVideoStream(), nullptr).num};
+    auto *videoEncoderRing = new EncoderChainRing(mainDevice->getVideoStream(),
+                                                  outputMuxer->getVideoStream(), videoEncoderConfig);
 
-    EncoderChainRing videoEncoderRing = EncoderChainRing(mainDevice.getVideoStream().value(),
-                                                         outputMuxer.getVideoStream().value(), videoEncoderConfig);
+    SWScaleConfig swScaleConfig = {
+            .inputWidth = videoDecoderRing->getDecoderContext()->width,
+            .inputHeight = videoDecoderRing->getDecoderContext()->height,
+            .inputPixelFormat = videoDecoderRing->getDecoderContext()->pix_fmt,
+            .outputWidth =   videoEncoderRing->getEncoderContext()->width,
+            .outputHeight   = videoEncoderRing->getEncoderContext()->height,
+            .outputPixelFormat = videoEncoderRing->getEncoderContext()->pix_fmt,
+    };
+    auto *swScaleFilterRing = new SWScaleFilterRing(swScaleConfig);
+    std::vector<FilterChainRing *> videoFilterRings = {swScaleFilterRing};
 
     // Init audio rings
-    DecoderChainRing audioDecoderRing = DecoderChainRing(auxDevice.getAudioStream().value());
-    std::vector<FilterChainRing> audioFilterRings = {};
-    int channels = auxDevice.getAudioStream()->getStream()->codecpar->channels;
+    auto *audioDecoderRing = new DecoderChainRing(auxDevice->getAudioStream());
+
+    int channels = auxDevice->getAudioStream()->codecpar->channels;
     EncoderConfig audioEncoderConfig = {.codecID = AV_CODEC_ID_AAC,
             .codecType = AVMEDIA_TYPE_AUDIO,
             .bitRate = OUTPUT_AUDIO_BIT_RATE,
             .channels= channels,
             .channelLayout = av_get_default_channel_layout(channels),
-            .sampleRate = auxDevice.getAudioStream()->getStream()->codecpar->sample_rate,
+            .sampleRate = auxDevice->getAudioStream()->codecpar->sample_rate,
             .sampleFormat = OUTPUT_AUDIO_SAMPLE_FMT,
             .strictStdCompliance = FF_COMPLIANCE_NORMAL
     };
-    EncoderChainRing audioEncoderRing = EncoderChainRing(auxDevice.getAudioStream().value(),
-                                                         outputMuxer.getAudioStream().value(), audioEncoderConfig);
+    auto *audioEncoderRing = new EncoderChainRing(auxDevice->getAudioStream(),
+                                                  outputMuxer->getAudioStream(), audioEncoderConfig);
+
+    SWResampleConfig swResampleConfig = {
+            .inputChannels =audioDecoderRing->getDecoderContext()->channels,
+            .inputChannelLayout= audioDecoderRing->getDecoderContext()->channel_layout,
+            .inputSampleFormat= audioDecoderRing->getDecoderContext()->sample_fmt,
+            .inputSampleRate= audioDecoderRing->getDecoderContext()->sample_rate,
+            .inputFrameSize= audioDecoderRing->getDecoderContext()->frame_size,
+            .outputChannels=  audioEncoderRing->getEncoderContext()->channels,
+            .outputChannelLayout= audioEncoderRing->getEncoderContext()->channel_layout,
+            .outputSampleFormat= audioEncoderRing->getEncoderContext()->sample_fmt,
+            .outputSampleRate= audioEncoderRing->getEncoderContext()->sample_rate,
+            .outputFrameSize= audioEncoderRing->getEncoderContext()->frame_size,
+    };
+    auto *swResampleFilterRing = new SWResampleFilterRing(swResampleConfig);
+    std::vector<FilterChainRing *> audioFilterRings = {swResampleFilterRing};
 
     // Init common rings
-    auto muxerRing = MuxerChainRing(outputMuxer);
+    auto *muxerRing = new MuxerChainRing(outputMuxer);
 
     // Init transcode process chains
-    this->videoTranscodeChain = ProcessChain(videoDecoderRing, videoFilterRings, videoEncoderRing, muxerRing);
-    this->audioTranscodeChain = ProcessChain(audioDecoderRing, audioFilterRings, audioEncoderRing, muxerRing);
+    this->videoTranscodeChain = new ProcessChain(videoDecoderRing, videoFilterRings, videoEncoderRing, muxerRing);
+    this->audioTranscodeChain = new ProcessChain(audioDecoderRing, audioFilterRings, audioEncoderRing, muxerRing);
 
     // Init control thread
     controlThread = std::thread([this]() {

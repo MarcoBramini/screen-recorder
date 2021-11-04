@@ -1,18 +1,12 @@
-//
-// Created by Marco Bramini on 01/11/21.
-//
-
 #ifndef PDS_SCREEN_RECORDING_ENCODER_RING_H
 #define PDS_SCREEN_RECORDING_ENCODER_RING_H
 
-#include "process_ring.h"
-#include "../stream_context.h"
 #include "muxer_ring.h"
 
 extern "C" {
 #include "libavformat/avformat.h"
 #include "libavcodec/avcodec.h"
-};
+}
 
 struct EncoderConfig {
     AVCodecID codecID;
@@ -35,22 +29,25 @@ struct EncoderConfig {
 };
 
 class EncoderChainRing {
-    StreamContext inputStream;
-    StreamContext outputStream;
+    AVStream* inputStream;
+    AVStream* outputStream;
 
     AVCodecContext *encoderContext;
 
     int64_t lastEncodedDTS;
 
-    MuxerChainRing* next;
+    MuxerChainRing *next;
 
     void init_encoder(const EncoderConfig &config);
 
 public:
-    EncoderChainRing(StreamContext inputStream, StreamContext outputStream, const EncoderConfig &config);
+    EncoderChainRing(AVStream* inputStream, AVStream* outputStream, const EncoderConfig &config);
 
-    void execute(AVFrame *inputFrame);
-    void setNext(MuxerChainRing* ring) { this->next = ring; };
+    void execute(ProcessContext* processContext,  AVFrame *inputFrame);
+
+    void setNext(MuxerChainRing *ring) { this->next = ring; };
+
+    AVCodecContext* getEncoderContext(){return this->encoderContext;};
 };
 
 
