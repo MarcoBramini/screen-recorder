@@ -104,6 +104,8 @@ public:
     void rec_stats_loop();
 
     void wait_recording();
+
+    ~RecordingService(){};
 };
 
 

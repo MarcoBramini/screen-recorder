@@ -22,14 +22,17 @@ ProcessChain::ProcessChain(DecoderChainRing *decoderRing, std::vector<FilterChai
                                                                                        encoderRing(encoderRing),
                                                                                        muxerRing(muxerRing) {
     // Set ring nexts
-    this->decoderRing->setNext(this->filterRings.front());
+    if (this->filterRings.empty()) {
+        this->decoderRing->setNext(this->encoderRing);
+    } else {
+        this->decoderRing->setNext(this->filterRings.front());
 
-    int i;
-    for (i = 0; i < this->filterRings.size() - 1; i++) {
-        this->filterRings[i]->setNext(this->filterRings[i + 1]);
+        int i;
+        for (i = 0; i < this->filterRings.size() - 1; i++) {
+            this->filterRings[i]->setNext(this->filterRings[i + 1]);
+        }
+        this->filterRings.back()->setNext(this->encoderRing);
     }
-    this->filterRings.back()->setNext(this->encoderRing);
-
     this->encoderRing->setNext(this->muxerRing);
 }
 
@@ -38,7 +41,7 @@ void ProcessChain::enqueueSourcePacket(AVPacket *p, int64_t pts) {
     sourceQueue.emplace(processContext);
 }
 
-void ProcessChain::flush(){
+void ProcessChain::flush() {
     // TODO: Flush everything else
     encoderRing->flush();
 }

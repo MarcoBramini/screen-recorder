@@ -29,8 +29,8 @@ struct EncoderConfig {
 };
 
 class EncoderChainRing {
-    AVStream* inputStream;
-    AVStream* outputStream;
+    AVStream *inputStream;
+    AVStream *outputStream;
 
     AVCodecContext *encoderContext;
 
@@ -41,15 +41,17 @@ class EncoderChainRing {
     void init_encoder(const EncoderConfig &config);
 
 public:
-    EncoderChainRing(AVStream* inputStream, AVStream* outputStream, const EncoderConfig &config);
+    EncoderChainRing(AVStream *inputStream, AVStream *outputStream, const EncoderConfig &config);
 
-    void execute(ProcessContext* processContext,  AVFrame *inputFrame);
+    void execute(ProcessContext *processContext, AVFrame *inputFrame);
 
     void setNext(MuxerChainRing *ring) { this->next = ring; };
 
-    AVCodecContext* getEncoderContext(){return this->encoderContext;};
+    AVCodecContext *getEncoderContext() { return this->encoderContext; };
 
     void flush();
+
+    ~EncoderChainRing() { avcodec_close(encoderContext); };
 };
 
 
