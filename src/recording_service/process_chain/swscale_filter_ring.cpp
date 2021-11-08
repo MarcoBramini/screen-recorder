@@ -31,6 +31,5 @@ void SWScaleFilterRing::execute(ProcessContext* processContext, AVFrame *inputFr
         std::get<EncoderChainRing *>(getNext())->execute(processContext, convertedFrame);
     }
 
-    av_frame_unref(convertedFrame);
     av_frame_free(&convertedFrame);
 }
