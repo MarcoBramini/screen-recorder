@@ -19,7 +19,7 @@ elseif (${UNIX})
             src/device_service/linux/device_service_linux.cpp)
 elseif (${WIN32})
     set(FILES
-            src/device_service/windows/device_service_windows.cpp src/recording_service/process_chain/process_ring.cpp src/recording_service/process_chain/process_ring.h)
+            src/device_service/windows/device_service_windows.cpp)
 endif ()
 
 add_executable(pds_screen_recording
