@@ -11,3 +11,5 @@ void MuxerChainRing::execute(ProcessContext* processContext, AVPacket* inputPack
                 Error::build_error_message(__FUNCTION__, {}, fmt::format("error muxing the packet ({})", Error::unpackAVError(ret))));
     }
 }
+
+MuxerChainRing::~MuxerChainRing() {  };

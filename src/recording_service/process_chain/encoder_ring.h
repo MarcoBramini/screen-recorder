@@ -32,6 +32,7 @@ class EncoderChainRing {
     AVStream *inputStream;
     AVStream *outputStream;
 
+    AVCodec *outputStreamCodec{};
     AVCodecContext *encoderContext;
 
     int64_t lastEncodedDTS;
@@ -51,7 +52,10 @@ public:
 
     void flush();
 
-    ~EncoderChainRing() { avcodec_close(encoderContext); };
+    ~EncoderChainRing() {
+        avcodec_close(encoderContext);
+        avcodec_free_context(&encoderContext);
+    };
 };
 
 

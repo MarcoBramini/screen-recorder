@@ -176,46 +176,7 @@ int RecordingService::stop_recording() {
     if (av_write_trailer(outputMuxer->getContext()) < 0) {
         std::cout << "write error" << std::endl;
         return -1;
-    }/*
-
-    if (inputAvfc != inputAuxAvfc) {
-        avformat_close_input(&inputAuxAvfc);
-        avformat_free_context(inputAuxAvfc);
     }
-    avformat_close_input(&inputAvfc);
-    avformat_free_context(inputAvfc);
-
-    inputAvfc = nullptr;
-    inputAuxAvfc = nullptr;
-    avformat_close_input(&outputAvfc);
-    avformat_free_context(outputAvfc);
-    outputAvfc = nullptr;
-
-    avcodec_close(inputVideoAvcc);
-    avcodec_free_context(&inputVideoAvcc);
-    inputVideoAvcc = nullptr;
-
-    avcodec_close(inputAudioAvcc);
-    avcodec_free_context(&inputAudioAvcc);
-    inputAudioAvcc = nullptr;
-
-    avcodec_close(outputVideoAvcc);
-    avcodec_free_context(&outputVideoAvcc);
-    outputVideoAvcc = nullptr;
-
-    avcodec_close(outputAudioAvcc);
-    avcodec_free_context(&outputAudioAvcc);
-    outputAudioAvcc = nullptr;
-
-    sws_freeContext(videoConverter);
-    videoConverter = nullptr;
-
-    swr_free(&audioConverter);
-    audioConverter = nullptr;
-
-    av_audio_fifo_free(audioConverterBuffer);
-    audioConverterBuffer = nullptr;
-*/
 
     return 0;
 }
@@ -263,7 +224,8 @@ RecordingService::RecordingService(const std::string &videoAddress, const std::s
 
     EncoderConfig videoEncoderConfig = {.codecID = AV_CODEC_ID_H264,
             .codecType = AVMEDIA_TYPE_VIDEO,
-            .encoderOptions = {{"preset",      "ultrafast"},
+            .encoderOptions = {{"profile","main"},
+                               {"preset",      "ultrafast"},
                                {"x264-params", "keyint=60:min-keyint=60:scenecut=0:force-cfr=1"},
                                {"tune",        "zerolatency"}},
             .bitRate = OUTPUT_VIDEO_BIT_RATE,
@@ -327,6 +289,11 @@ RecordingService::RecordingService(const std::string &videoAddress, const std::s
     // Init control thread
     controlThread = std::thread([this]() {
         // Initialize signal to stop recording on sigterm
+        std::signal(SIGTERM, [](int) {
+            std::cout << "sigterm" << std::endl;
+            mustTerminateSignal = true;
+        });
+
         std::signal(SIGINT, [](int) {
             std::cout << "sigterm" << std::endl;
             mustTerminateSignal = true;

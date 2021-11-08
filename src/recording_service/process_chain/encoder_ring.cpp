@@ -2,13 +2,14 @@
 #include "encoder_ring.h"
 #include "../error.h"
 #include "process_context.h"
+#include <iostream>
 
 extern "C" {
 #include <libavdevice/avdevice.h>
 }
 
 EncoderChainRing::EncoderChainRing(AVStream * inputStream, AVStream* outputStream, const EncoderConfig &config)
-        : inputStream(inputStream), outputStream(outputStream), encoderContext(nullptr), lastEncodedDTS(0),
+        : inputStream(inputStream), outputStream(outputStream), outputStreamCodec(nullptr), encoderContext(nullptr), lastEncodedDTS(-1),
           next(nullptr) {
 
     // Initialize encoder
@@ -18,14 +19,14 @@ EncoderChainRing::EncoderChainRing(AVStream * inputStream, AVStream* outputStrea
 /// Initializes the encoder for the output stream.
 void EncoderChainRing::init_encoder(const EncoderConfig &config) {
     // Find encoder for output stream
-    AVCodec *avc = avcodec_find_encoder(config.codecID);
-    if (!avc) {
+    outputStreamCodec = avcodec_find_encoder(config.codecID);
+    if (!outputStreamCodec) {
         throw std::runtime_error(
                 Error::build_error_message(__FUNCTION__, {}, fmt::format("error finding encoder '{}'", config.codecID)));
     }
 
     // Allocate context for the encoder
-    encoderContext = avcodec_alloc_context3(avc);
+    encoderContext = avcodec_alloc_context3(outputStreamCodec);
     if (!encoderContext) {
         throw std::runtime_error(Error::build_error_message(__FUNCTION__, {}, "error allocating context for the encoder"));
     }
@@ -46,9 +47,9 @@ void EncoderChainRing::init_encoder(const EncoderConfig &config) {
             encoderContext->width = config.width;
             encoderContext->pix_fmt = config.pixelFormat;
             encoderContext->bit_rate = config.bitRate;
-            encoderContext->framerate = {config.frameRate, 1};
             encoderContext->time_base = {1, config.frameRate};
             encoderContext->sample_aspect_ratio = inputStream->codecpar->sample_aspect_ratio;
+            encoderContext->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
             break;
         case AVMEDIA_TYPE_AUDIO:
         default:
@@ -66,15 +67,15 @@ void EncoderChainRing::init_encoder(const EncoderConfig &config) {
     // set codec to automatically determine how many threads suits best for the decoding job
     encoderContext->thread_count = 0;
 
-    if (avc->capabilities | AV_CODEC_CAP_FRAME_THREADS)
+    if (outputStreamCodec->capabilities | AV_CODEC_CAP_FRAME_THREADS)
         encoderContext->thread_type = FF_THREAD_FRAME;
-    else if (avc->capabilities | AV_CODEC_CAP_SLICE_THREADS)
+    else if (outputStreamCodec->capabilities | AV_CODEC_CAP_SLICE_THREADS)
         encoderContext->thread_type = FF_THREAD_SLICE;
     else
         encoderContext->thread_count = 1; //don't use multithreading
 
     // Open encoder
-    ret = avcodec_open2(encoderContext, avc, nullptr);
+    ret = avcodec_open2(encoderContext, outputStreamCodec, nullptr);
     if (ret < 0) {
         throw std::runtime_error(
                 Error::build_error_message(__FUNCTION__, {}, fmt::format("error opening encoder ({})", Error::unpackAVError(ret))));
@@ -96,6 +97,7 @@ void EncoderChainRing::flush(){
 void EncoderChainRing::execute(ProcessContext* processContext, AVFrame *inputFrame) {
     // Calculate frame PTS
     if (processContext) { // Are we flushing?
+        inputFrame->pict_type = AV_PICTURE_TYPE_NONE;
         inputFrame->pts = av_rescale_q(processContext->sourcePacketPts,
                                        inputStream->time_base,
                                        encoderContext->time_base);

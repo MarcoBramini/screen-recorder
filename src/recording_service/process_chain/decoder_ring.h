@@ -18,13 +18,18 @@ class DecoderChainRing {
     std::variant<FilterChainRing *, EncoderChainRing *> next;
 
 public:
-    explicit DecoderChainRing(AVStream* inputStream);
+    explicit DecoderChainRing(AVStream *inputStream);
 
-    void execute(ProcessContext* processContext);
+    void execute(ProcessContext *processContext);
 
     void setNext(std::variant<FilterChainRing *, EncoderChainRing *> ring) { this->next = ring; };
 
-    AVCodecContext* getDecoderContext(){return this->decoderContext;};
+    AVCodecContext *getDecoderContext() { return this->decoderContext; };
+
+    ~DecoderChainRing() {
+        avcodec_close(decoderContext);
+        avcodec_free_context(&decoderContext);
+    };
 };
 
 

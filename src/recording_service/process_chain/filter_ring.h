@@ -18,8 +18,6 @@ public:
     std::variant<FilterChainRing *, EncoderChainRing *> getNext() { return this->next; };
 
     void setNext(std::variant<FilterChainRing *, EncoderChainRing *> ring) { this->next = ring; };
-
-    ~FilterChainRing()= default;;
 };
 
 #endif //PDS_SCREEN_RECORDING_FILTER_RING_H

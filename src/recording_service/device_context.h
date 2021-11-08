@@ -36,6 +36,11 @@ public:
     AVStream *getVideoStream() { return this->videoStream; };
 
     AVStream *getAudioStream() { return this->audioStream; };
+
+    ~DeviceContext() {
+        avformat_close_input(&avfc);
+        avformat_free_context(avfc);
+    };
 };
 
 

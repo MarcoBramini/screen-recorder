@@ -15,6 +15,8 @@ public:
     explicit MuxerChainRing(DeviceContext* muxerContext);
 
     void execute(ProcessContext* processContext, AVPacket* inputPacket);
+
+    ~MuxerChainRing();
 };
 
 

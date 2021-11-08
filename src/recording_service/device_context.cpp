@@ -30,12 +30,13 @@ DeviceContext *DeviceContext::init_muxer(const std::string &outputFileName) {
     if (!deviceContext->videoStream) {
         throw std::runtime_error(Error::build_error_message(__FUNCTION__, {}, "error allocating output AVStream"));
     }
+    deviceContext->videoStream->time_base = {1, 1000};
     // Add new output audio stream
     deviceContext->audioStream = avformat_new_stream(deviceContext->avfc, nullptr);
     if (!deviceContext->audioStream) {
         throw std::runtime_error(Error::build_error_message(__FUNCTION__, {}, "error allocating output AVStream"));
     }
-
+    deviceContext->audioStream->time_base = {1, 1000};
     return deviceContext;
 }
 

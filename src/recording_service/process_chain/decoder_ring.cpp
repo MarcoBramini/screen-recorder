@@ -60,5 +60,5 @@ void DecoderChainRing::execute(ProcessContext* processContext) {
             }
         }
     }
-    av_frame_unref(decodedFrame);
+    av_frame_free(&decodedFrame);
 }

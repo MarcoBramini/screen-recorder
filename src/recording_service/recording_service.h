@@ -22,7 +22,7 @@ extern "C" {
 // Settings
 const AVSampleFormat OUTPUT_AUDIO_SAMPLE_FMT = AV_SAMPLE_FMT_FLTP;
 const AVPixelFormat OUTPUT_VIDEO_PIXEL_FMT = AV_PIX_FMT_YUV420P;
-const int64_t OUTPUT_VIDEO_BIT_RATE = 1000000;
+const int64_t OUTPUT_VIDEO_BIT_RATE = 1500000;
 const int64_t OUTPUT_AUDIO_BIT_RATE = 96000;
 const int OUTPUT_HEIGHT = 1080;
 const int OUTPUT_WIDTH = 1920;
@@ -58,22 +58,22 @@ class RecordingService {
     // ------
 
     // Input context
-    DeviceContext* mainDevice;
-    DeviceContext* auxDevice;
+    DeviceContext *mainDevice;
+    DeviceContext *auxDevice;
 
     // ------
     // Output
     // ------
 
     // Output context
-    DeviceContext* outputMuxer;
+    DeviceContext *outputMuxer;
 
     // ---------------
     // Transcode Chain
     // ---------------
 
-    ProcessChain* videoTranscodeChain;
-    ProcessChain* audioTranscodeChain;
+    ProcessChain *videoTranscodeChain;
+    ProcessChain *audioTranscodeChain;
 
     // recording_utils.cpp
     static std::map<std::string, std::string> get_device_options(const std::string &deviceID);
@@ -81,9 +81,9 @@ class RecordingService {
     static std::tuple<std::string, std::string> unpackDeviceAddress(const std::string &deviceAddress);
 
     // recording_service.cpp
-    int start_capture_loop(DeviceContext* inputDevice);
+    int start_capture_loop(DeviceContext *inputDevice);
 
-    void start_transcode_process(ProcessChain* transcodeChain);
+    void start_transcode_process(ProcessChain *transcodeChain);
 
 public:
     RecordingService(const std::string &videoAddress, const std::string &audioAddress,
@@ -97,15 +97,24 @@ public:
 
     int stop_recording();
 
-    void enqueue_video_packet(DeviceContext* inputDevice, AVPacket *inputVideoPacket);
+    void enqueue_video_packet(DeviceContext *inputDevice, AVPacket *inputVideoPacket);
 
-    void enqueue_audio_packet(DeviceContext* inputDevice, AVPacket *inputAudioPacket);
+    void enqueue_audio_packet(DeviceContext *inputDevice, AVPacket *inputAudioPacket);
 
     void rec_stats_loop();
 
     void wait_recording();
 
-    ~RecordingService(){};
+    ~RecordingService() {
+        if (mainDevice != auxDevice) {
+            delete auxDevice;
+        }
+        delete mainDevice;
+        delete outputMuxer;
+
+        delete videoTranscodeChain;
+        delete audioTranscodeChain;
+    };
 };
 
 

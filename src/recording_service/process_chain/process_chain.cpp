@@ -38,7 +38,7 @@ ProcessChain::ProcessChain(DecoderChainRing *decoderRing, std::vector<FilterChai
 
 void ProcessChain::enqueueSourcePacket(AVPacket *p, int64_t pts) {
     auto *processContext = new ProcessContext(p, pts);
-    sourceQueue.emplace(processContext);
+    sourceQueue.push(processContext);
 }
 
 void ProcessChain::flush() {
