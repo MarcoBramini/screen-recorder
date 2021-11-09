@@ -17,23 +17,25 @@ struct SWResampleConfig {
     AVSampleFormat inputSampleFormat;
     int inputSampleRate;
     int inputFrameSize;
+    AVRational inputTimeBase;
     int outputChannels;
     int64_t outputChannelLayout;
     AVSampleFormat outputSampleFormat;
     int outputSampleRate;
     int outputFrameSize;
+    AVRational outputTimeBase;
 };
 
 class SWResampleFilterRing : public FilterChainRing {
     SwrContext *swrContext;
     SWResampleConfig config;
-    AVAudioFifo* outputBuffer;
+    AVAudioFifo *outputBuffer;
 public:
     explicit SWResampleFilterRing(SWResampleConfig config);
 
     ~SWResampleFilterRing() { swr_free(&swrContext); }
 
-    void execute(ProcessContext* processContext, AVFrame *inputFrame) override;
+    void execute(ProcessContext *processContext, AVFrame *inputFrame) override;
 };
 
 

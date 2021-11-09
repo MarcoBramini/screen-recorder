@@ -36,7 +36,7 @@ SWResampleFilterRing::SWResampleFilterRing(SWResampleConfig swResampleConfig) : 
     }
 }
 
-void SWResampleFilterRing::execute(ProcessContext* processContext, AVFrame *inputFrame) {
+void SWResampleFilterRing::execute(ProcessContext *processContext, AVFrame *inputFrame) {
     uint8_t **audioData;
     int ret = av_samples_alloc_array_and_samples(&audioData, nullptr, config.outputChannels,
                                                  inputFrame->nb_samples, OUTPUT_AUDIO_SAMPLE_FMT, 0);
@@ -66,14 +66,19 @@ void SWResampleFilterRing::execute(ProcessContext* processContext, AVFrame *inpu
         throw std::runtime_error("Error allocating new frame");
     }
 
-    while (av_audio_fifo_size(outputBuffer) >=
-           config.outputFrameSize) { // TODO: Changed from outputAudioAvcc->frame_size
+    int64_t framePts = processContext->sourcePacketPts;
+    int64_t frameOffset = 0;
+    while (av_audio_fifo_size(outputBuffer) >= config.outputFrameSize) {
         // Build frame from buffer
         convertedFrame->nb_samples = config.outputFrameSize;
         convertedFrame->channels = config.outputChannels;
         convertedFrame->channel_layout = config.outputChannelLayout;
         convertedFrame->format = config.outputSampleFormat;
         convertedFrame->sample_rate = config.outputSampleRate;
+
+        // Calculate converted frame pts
+        processContext->sourcePacketPts = framePts + frameOffset;
+        frameOffset += av_rescale_q(config.outputFrameSize, config.outputTimeBase, config.inputTimeBase);
 
         if (av_frame_get_buffer(convertedFrame, 0) < 0) {
             throw std::runtime_error("Error reading from audio buffer");
@@ -91,6 +96,6 @@ void SWResampleFilterRing::execute(ProcessContext* processContext, AVFrame *inpu
 
         av_frame_unref(convertedFrame);
     }
-        av_frame_free(&convertedFrame);
+    av_frame_free(&convertedFrame);
 
 }

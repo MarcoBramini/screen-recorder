@@ -224,7 +224,7 @@ RecordingService::RecordingService(const std::string &videoAddress, const std::s
 
     EncoderConfig videoEncoderConfig = {.codecID = AV_CODEC_ID_H264,
             .codecType = AVMEDIA_TYPE_VIDEO,
-            .encoderOptions = {{"profile","main"},
+            .encoderOptions = {{"profile",     "main"},
                                {"preset",      "ultrafast"},
                                {"x264-params", "keyint=60:min-keyint=60:scenecut=0:force-cfr=1"},
                                {"tune",        "zerolatency"}},
@@ -270,11 +270,13 @@ RecordingService::RecordingService(const std::string &videoAddress, const std::s
             .inputSampleFormat= audioDecoderRing->getDecoderContext()->sample_fmt,
             .inputSampleRate= audioDecoderRing->getDecoderContext()->sample_rate,
             .inputFrameSize= audioDecoderRing->getDecoderContext()->frame_size,
+            .inputTimeBase = auxDevice->getAudioStream()->time_base,
             .outputChannels=  audioEncoderRing->getEncoderContext()->channels,
             .outputChannelLayout= av_get_default_channel_layout(channels),
             .outputSampleFormat= audioEncoderRing->getEncoderContext()->sample_fmt,
             .outputSampleRate= audioEncoderRing->getEncoderContext()->sample_rate,
             .outputFrameSize= audioEncoderRing->getEncoderContext()->frame_size,
+            .outputTimeBase = audioEncoderRing->getEncoderContext()->time_base,
     };
     auto *swResampleFilterRing = new SWResampleFilterRing(swResampleConfig);
     std::vector<FilterChainRing *> audioFilterRings = {swResampleFilterRing};
