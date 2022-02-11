@@ -49,13 +49,17 @@ add_executable(pds_screen_recording
         src/recording_service/process_chain/swscale_filter_ring.cpp
         src/recording_service/process_chain/swscale_filter_ring.h
         src/recording_service/process_chain/swresample_filter_ring.cpp
-        src/recording_service/process_chain/swresample_filter_ring.h)
+        src/recording_service/process_chain/swresample_filter_ring.h
+        src/recording_service/process_chain/vfcrop_filter_ring.cpp
+        src/recording_service/process_chain/vfcrop_filter_ring.h
+        )
 
 
 target_link_libraries(pds_screen_recording avdevice)
 target_link_libraries(pds_screen_recording avformat)
 target_link_libraries(pds_screen_recording avutil)
 target_link_libraries(pds_screen_recording avcodec)
+target_link_libraries(pds_screen_recording avfilter)
 target_link_libraries(pds_screen_recording swresample)
 target_link_libraries(pds_screen_recording swscale)
 target_link_libraries(pds_screen_recording fmt)

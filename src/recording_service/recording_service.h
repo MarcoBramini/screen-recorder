@@ -1,121 +1,133 @@
 #ifndef PDS_SCREEN_RECORDING_RECORDINGSERVICE_H
 #define PDS_SCREEN_RECORDING_RECORDINGSERVICE_H
 
-#include <optional>
-#include <string>
 #include <iostream>
-#include <thread>
-#include <queue>
 #include <map>
+#include <optional>
+#include <queue>
+#include <string>
+#include <thread>
 #include "device_context.h"
 #include "process_chain/process_chain.h"
 
 extern "C" {
+#include <libavcodec/avcodec.h>
 #include <libavdevice/avdevice.h>
 #include <libavformat/avformat.h>
-#include <libavcodec/avcodec.h>
-#include <libswresample/swresample.h>
 #include <libavutil/audio_fifo.h>
+#include <libswresample/swresample.h>
 #include <libswscale/swscale.h>
 }
+
+struct RecordingConfig {
+  std::string videoAddress;
+  std::string audioAddress;
+  std::string outputFilename;
+  std::optional<std::tuple<int, int, int, int>>
+      cropWindow;            // x1,y1,x2,y2 from top left
+  float rescaleValue = 1.0;  // output resolution will be calculated as
+                             // (height,width)//rescaleValue
+  int framerate = 30;
+};
 
 // Settings
 const AVSampleFormat OUTPUT_AUDIO_SAMPLE_FMT = AV_SAMPLE_FMT_FLTP;
 const AVPixelFormat OUTPUT_VIDEO_PIXEL_FMT = AV_PIX_FMT_YUV420P;
 const int64_t OUTPUT_VIDEO_BIT_RATE = 1500000;
 const int64_t OUTPUT_AUDIO_BIT_RATE = 96000;
-const int OUTPUT_HEIGHT = 1080;
-const int OUTPUT_WIDTH = 1920;
-const int OUTPUT_VIDEO_FRAME_RATE = 30;
 
-enum RecordingStatus {
-    IDLE,
-    RECORDING,
-    PAUSE,
-    STOP
-};
+enum RecordingStatus { IDLE, RECORDING, PAUSE, STOP };
 
 class RecordingService {
+  // ------
+  // Status
+  // ------
+  RecordingStatus recordingStatus;
 
-    // ------
-    // Status
-    // ------
-    RecordingStatus recordingStatus;
+  // -------
+  // Threads
+  // -------
 
-    // -------
-    // Threads
-    // -------
+  std::thread videoCaptureThread;
+  std::thread audioCaptureThread;
+  std::thread capturedVideoPacketsProcessThread;
+  std::thread capturedAudioPacketsProcessThread;
+  std::thread recordingStatsThread;
+  std::thread controlThread;
 
-    std::thread videoCaptureThread;
-    std::thread audioCaptureThread;
-    std::thread capturedVideoPacketsProcessThread;
-    std::thread capturedAudioPacketsProcessThread;
-    std::thread recordingStatsThread;
-    std::thread controlThread;
+  // ------
+  // Input
+  // ------
 
-    // ------
-    // Input
-    // ------
+  // Input context
+  DeviceContext* mainDevice;
+  DeviceContext* auxDevice;
 
-    // Input context
-    DeviceContext *mainDevice;
-    DeviceContext *auxDevice;
+  // ------
+  // Output
+  // ------
 
-    // ------
-    // Output
-    // ------
+  // Output context
+  DeviceContext* outputMuxer;
 
-    // Output context
-    DeviceContext *outputMuxer;
+  // ---------------
+  // Transcode Chain
+  // ---------------
 
-    // ---------------
-    // Transcode Chain
-    // ---------------
+  ProcessChain* videoTranscodeChain;
+  ProcessChain* audioTranscodeChain;
 
-    ProcessChain *videoTranscodeChain;
-    ProcessChain *audioTranscodeChain;
+  // recording_utils.cpp
+  static std::map<std::string, std::string> get_device_options(
+      const std::string& deviceID,
+      RecordingConfig config);
 
-    // recording_utils.cpp
-    static std::map<std::string, std::string> get_device_options(const std::string &deviceID);
+  static std::tuple<std::string, std::string> unpackDeviceAddress(
+      const std::string& deviceAddress);
 
-    static std::tuple<std::string, std::string> unpackDeviceAddress(const std::string &deviceAddress);
+  static std::tuple<int, int> get_scaled_resolution(int inputWidth,
+                                                    int inputHeight,
+                                                    float scale);
 
-    // recording_service.cpp
-    int start_capture_loop(DeviceContext *inputDevice);
+  static std::tuple<int, int, int, int>
+  get_output_window(int inputWidth, int inputHeight, RecordingConfig config);
 
-    void start_transcode_process(ProcessChain *transcodeChain);
+  // recording_service.cpp
+  int start_capture_loop(DeviceContext* inputDevice);
 
-public:
-    RecordingService(const std::string &videoAddress, const std::string &audioAddress,
-                     const std::string &outputFilename);
+  void start_transcode_process(ProcessChain* transcodeChain);
 
-    int start_recording();
+ public:
+  RecordingService(RecordingConfig config);
 
-    int pause_recording();
+  int start_recording();
 
-    int resume_recording();
+  int pause_recording();
 
-    int stop_recording();
+  int resume_recording();
 
-    void enqueue_video_packet(DeviceContext *inputDevice, AVPacket *inputVideoPacket);
+  int stop_recording();
 
-    void enqueue_audio_packet(DeviceContext *inputDevice, AVPacket *inputAudioPacket);
+  void enqueue_video_packet(DeviceContext* inputDevice,
+                            AVPacket* inputVideoPacket);
 
-    void rec_stats_loop();
+  void enqueue_audio_packet(DeviceContext* inputDevice,
+                            AVPacket* inputAudioPacket);
 
-    void wait_recording();
+  void rec_stats_loop();
 
-    ~RecordingService() {
-        if (mainDevice != auxDevice) {
-            delete auxDevice;
-        }
-        delete mainDevice;
-        delete outputMuxer;
+  void wait_recording();
 
-        delete videoTranscodeChain;
-        delete audioTranscodeChain;
-    };
+  ~RecordingService() {
+    if (mainDevice != auxDevice) {
+      delete auxDevice;
+    }
+    delete mainDevice;
+    delete outputMuxer;
+
+    delete videoTranscodeChain;
+    delete audioTranscodeChain;
+  };
 };
 
-
-#endif //PDS_SCREEN_RECORDING_RECORDINGSERVICE_H
+#endif  // PDS_SCREEN_RECORDING_RECORDINGSERVICE_H

@@ -12,7 +12,7 @@ extern "C" {
 }
 
 class DecoderChainRing {
-    AVCodec *streamCodec;
+    const AVCodec *streamCodec;
     AVCodecContext *decoderContext;
 
     std::variant<FilterChainRing *, EncoderChainRing *> next;
