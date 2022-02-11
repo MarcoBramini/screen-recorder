@@ -52,6 +52,8 @@ add_executable(pds_screen_recording
         src/recording_service/process_chain/swresample_filter_ring.h
         src/recording_service/process_chain/vfcrop_filter_ring.cpp
         src/recording_service/process_chain/vfcrop_filter_ring.h
+        src/recording_service/packet_capturer/packet_capturer.cpp
+        src/recording_service/packet_capturer/packet_capturer.h
         )
 
 

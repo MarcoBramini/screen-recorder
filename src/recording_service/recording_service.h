@@ -8,6 +8,7 @@
 #include <string>
 #include <thread>
 #include "device_context.h"
+#include "packet_capturer/packet_capturer.h"
 #include "process_chain/process_chain.h"
 
 extern "C" {
@@ -43,6 +44,7 @@ class RecordingService {
   // Status
   // ------
   RecordingStatus recordingStatus;
+  int64_t pauseTimestamp;
 
   // -------
   // Threads
@@ -70,6 +72,13 @@ class RecordingService {
   // Output context
   DeviceContext* outputMuxer;
 
+  // ----------------
+  // Packet Capturers
+  // ----------------
+
+  PacketCapturer* mainDeviceCapturer;
+  PacketCapturer* auxDeviceCapturer;
+
   // ---------------
   // Transcode Chain
   // ---------------
@@ -93,7 +102,7 @@ class RecordingService {
   get_output_window(int inputWidth, int inputHeight, RecordingConfig config);
 
   // recording_service.cpp
-  int start_capture_loop(DeviceContext* inputDevice);
+  void start_capture_loop(PacketCapturer* capturer);
 
   void start_transcode_process(ProcessChain* transcodeChain);
 

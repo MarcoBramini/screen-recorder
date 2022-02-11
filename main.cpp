@@ -41,13 +41,14 @@ int main() {
                   audioDevices[audioDeviceID].getURL());
 
   // Start recording
-  std::tuple<int, int, int, int> cropWindow = {0, 0, 1000, 1000};
+  std::tuple<int, int, int, int> cropWindow = {0, 0, 5000, 2000};
   RecordingService rs = RecordingService({
       .videoAddress = videoAddress,
       .audioAddress = audioAddress,
       .outputFilename = "output.mp4",
       .rescaleValue = 3,
-      .cropWindow = cropWindow,
+      .framerate = 20,
+      //.cropWindow = cropWindow,
   });
   rs.start_recording();
 

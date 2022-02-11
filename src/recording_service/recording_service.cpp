@@ -17,74 +17,37 @@
 #include "process_chain/swscale_filter_ring.h"
 #include "process_chain/vfcrop_filter_ring.h"
 
+using namespace std::chrono;
+
 static bool mustTerminateSignal = false;
 
-int64_t last_video_pts = 0;
-
-void RecordingService::enqueue_video_packet(DeviceContext* inputDevice,
-                                            AVPacket* inputVideoPacket) {
-  auto videoPacket = av_packet_clone(inputVideoPacket);
-
-  int64_t relativePts =
-      inputVideoPacket->pts - inputDevice->getVideoStream()->start_time;
+void on_video_packet_capture(AVPacket* videoPacket,
+                             int64_t relativePts,
+                             ProcessChain* videoTranscodeChain) {
   videoTranscodeChain->enqueueSourcePacket(videoPacket, relativePts);
-  last_video_pts = relativePts;
 }
 
-int64_t last_audio_pts = 0;
-
-void RecordingService::enqueue_audio_packet(DeviceContext* inputDevice,
-                                            AVPacket* inputAudioPacket) {
-  auto audioPacket = av_packet_clone(inputAudioPacket);
-
-  int64_t relativePts =
-      inputAudioPacket->pts - inputDevice->getAudioStream()->start_time;
+void on_audio_packet_capture(AVPacket* audioPacket,
+                             int64_t relativePts,
+                             ProcessChain* audioTranscodeChain) {
   audioTranscodeChain->enqueueSourcePacket(audioPacket, relativePts);
-
-  last_audio_pts = relativePts;
 }
 
-int RecordingService::start_capture_loop(DeviceContext* inputDevice) {
-  AVPacket inputPacket;
-  while (recordingStatus == RECORDING) {
-    int ret = av_read_frame(inputDevice->getContext(), &inputPacket);
-    if (ret == AVERROR(EAGAIN))
+void RecordingService::start_capture_loop(PacketCapturer* capturer) {
+  while (recordingStatus == RECORDING || recordingStatus == PAUSE) {
+    // TODO: use pause cond var
+    if (recordingStatus == PAUSE)
       continue;
 
-    if (ret < 0) {
-      std::string error = "Capture failed with:";
-      error.append(Error::unpackAVError(ret));
-      throw std::runtime_error(error);
-    }
-
-    AVMediaType packetType = inputDevice->getContext()
-                                 ->streams[inputPacket.stream_index]
-                                 ->codecpar->codec_type;
-
-    switch (packetType) {
-      case AVMEDIA_TYPE_VIDEO:
-        enqueue_video_packet(inputDevice, &inputPacket);
-        break;
-      case AVMEDIA_TYPE_AUDIO:
-        enqueue_audio_packet(inputDevice, &inputPacket);
-        break;
-      default:
-        throw std::runtime_error(Error::build_error_message(
-            __FUNCTION__, {}, fmt::format("unexpected packet type ({})", ret)));
-    }
-    av_packet_unref(&inputPacket);
+    capturer->capture_next();
   }
-
-  return 0;
 }
-
-int64_t last_processed_video_pts = 0;
-int64_t last_processed_audio_pts = 0;
 
 void RecordingService::start_transcode_process(ProcessChain* transcodeChain) {
   while (true) {
+    // TODO: use cond var to handle empty queue
     if (transcodeChain->isSourceQueueEmpty()) {
-      if (recordingStatus == RECORDING)
+      if (recordingStatus == RECORDING || recordingStatus == PAUSE)
         continue;
       break;
     }
@@ -95,7 +58,7 @@ void RecordingService::start_transcode_process(ProcessChain* transcodeChain) {
 
 void RecordingService::rec_stats_loop() {
   while (recordingStatus == RECORDING) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    std::this_thread::sleep_for(std::chrono::nanoseconds(300));
     /*std::cout << "\r Packet Queue Size: " << capturedVideoPacketsQueue.size()
               << "Last Captured PTS - video: "
               << av_rescale_q(last_video_pts, outputVideoAvcc->time_base, {1,
@@ -122,11 +85,11 @@ int RecordingService::start_recording() {
 
   // Call start_recording_loop in a new thread
   videoCaptureThread =
-      std::thread([this]() { start_capture_loop(mainDevice); });
+      std::thread([this]() { start_capture_loop(mainDeviceCapturer); });
 
   if (mainDevice != auxDevice) {
     audioCaptureThread =
-        std::thread([this]() { start_capture_loop(auxDevice); });
+        std::thread([this]() { start_capture_loop(auxDeviceCapturer); });
   }
 
   capturedVideoPacketsProcessThread =
@@ -142,6 +105,9 @@ int RecordingService::start_recording() {
 
 int RecordingService::pause_recording() {
   // Set pauseTimestamp
+  pauseTimestamp =
+      duration_cast<microseconds>(system_clock::now().time_since_epoch())
+          .count();
 
   // Set cond var isPaused to true
   recordingStatus = PAUSE;
@@ -151,6 +117,12 @@ int RecordingService::pause_recording() {
 
 int RecordingService::resume_recording() {
   // Increment pausedTime by resumeTimestamp - pauseTimestamp interval
+  int64_t resumeTimestamp =
+      duration_cast<microseconds>(system_clock::now().time_since_epoch())
+          .count();
+
+  mainDeviceCapturer->add_pause_duration(resumeTimestamp - pauseTimestamp);
+  auxDeviceCapturer->add_pause_duration(resumeTimestamp - pauseTimestamp);
 
   // Set cond var isPaused to false
   recordingStatus = RECORDING;
@@ -330,27 +302,45 @@ RecordingService::RecordingService(RecordingConfig config) {
   this->audioTranscodeChain = new ProcessChain(
       audioDecoderRing, audioFilterRings, audioEncoderRing, muxerRing);
 
+  // Init packet capturers
+  mainDeviceCapturer = new PacketCapturer(
+      mainDevice,
+      std::bind(&on_video_packet_capture, std::placeholders::_1,
+                std::placeholders::_2, videoTranscodeChain),
+      std::bind(&on_audio_packet_capture, std::placeholders::_1,
+                std::placeholders::_2, audioTranscodeChain));
+
+  auxDeviceCapturer = new PacketCapturer(
+      auxDevice,
+      std::bind(&on_video_packet_capture, std::placeholders::_1,
+                std::placeholders::_2, videoTranscodeChain),
+      std::bind(&on_audio_packet_capture, std::placeholders::_1,
+                std::placeholders::_2, audioTranscodeChain));
+
   // Init control thread
   controlThread = std::thread([this]() {
-    // Initialize signal to stop recording on sigterm
-    std::signal(SIGTERM, [](int) {
-      std::cout << "sigterm" << std::endl;
-      mustTerminateSignal = true;
-    });
-
-    std::signal(SIGINT, [](int) {
-      std::cout << "sigterm" << std::endl;
-      mustTerminateSignal = true;
-    });
-
-    while (!mustTerminateSignal) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    std::cout << "Tap Pause(p), Resume(r) or Stop(s)" << std::endl;
+    char c;
+    while (true) {
+      scanf("%c", &c);
+      std::cout << "asdasd" << c << std::endl;
+      if (c == 'p') {
+        std::cout << "pausing" << std::endl;
+        pause_recording();
+        std::cout << "paused" << std::endl;
+      } else if (c == 'r') {
+        std::cout << "resuming" << std::endl;
+        resume_recording();
+        std::cout << "resumed" << std::endl;
+      } else if (c == 's') {
+        std::cout << "stopping" << std::endl;
+        stop_recording();
+        std::cout << "stopped" << std::endl;
+        break;
+      }
     }
-    if (mustTerminateSignal) {
-      std::cout << "exiting" << std::endl;
-      stop_recording();
-      std::cout << "exited" << std::endl;
-    }
+
+    std::cout << "exiting" << std::endl;
   });
 }
 
