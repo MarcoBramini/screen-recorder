@@ -1,4 +1,4 @@
-#include "../device_service.h"
+#include "../../../include/device_service.h"
 #include <vector>
 #include <dirent.h>
 #include <X11/Xlib.h>

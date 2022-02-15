@@ -1,7 +1,7 @@
 #include <fmt/core.h>
 #include "swresample_filter_ring.h"
 #include "../error.h"
-#include "../recording_service.h"
+#include "../recording_service_impl.h"
 
 SWResampleFilterRing::SWResampleFilterRing(SWResampleConfig swResampleConfig) : config(swResampleConfig) {
     // Allocate audio converter context

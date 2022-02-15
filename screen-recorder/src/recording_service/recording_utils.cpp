@@ -1,8 +1,8 @@
 #include <fmt/core.h>
-#include "recording_service.h"
+#include "recording_service_impl.h"
 
 /// Returns the options associated to an input device.
-std::map<std::string, std::string> RecordingService::get_device_options(
+std::map<std::string, std::string> RecordingServiceImpl::get_device_options(
     const std::string& deviceID,
     RecordingConfig config) {
   if (deviceID == "avfoundation") {
@@ -23,7 +23,7 @@ std::map<std::string, std::string> RecordingService::get_device_options(
   return {};
 }
 
-std::tuple<std::string, std::string> RecordingService::unpackDeviceAddress(
+std::tuple<std::string, std::string> RecordingServiceImpl::unpackDeviceAddress(
     const std::string& deviceAddress) {
   int delimiterIndex = deviceAddress.find(':');
   std::string deviceID = deviceAddress.substr(0, delimiterIndex);
@@ -37,13 +37,13 @@ inline int make_even(int n) {
   return n - n % 2;
 }
 
-std::tuple<int, int> RecordingService::get_scaled_resolution(int width,
-                                                             int height,
-                                                             float scale) {
+std::tuple<int, int> RecordingServiceImpl::get_scaled_resolution(int width,
+                                                                 int height,
+                                                                 float scale) {
   return {make_even((int)width / scale), make_even((int)height / scale)};
 }
 
-std::tuple<int, int, int, int> RecordingService::get_output_window(
+std::tuple<int, int, int, int> RecordingServiceImpl::get_output_window(
     int width,
     int height,
     RecordingConfig config) {

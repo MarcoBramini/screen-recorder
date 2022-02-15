@@ -1,13 +1,12 @@
+#include <device_service.h>
 #include <fmt/core.h>
+#include <recording_service.h>
 
 #include <chrono>
 #include <thread>
 #include <vector>
 
 #include "iostream"
-#include "src/device_service/device_service.h"
-#include "src/device_service/input_device.h"
-#include "src/recording_service/recording_service.h"
 
 int main() {
   // List all the available input devices
@@ -47,7 +46,7 @@ int main() {
       .audioAddress = audioAddress,
       .outputFilename = "output.mp4",
       .rescaleValue = 3,
-      .framerate = 20,
+      .framerate = 30,
       //.cropWindow = cropWindow,
   });
   rs.start_recording();
