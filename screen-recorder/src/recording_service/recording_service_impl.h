@@ -7,6 +7,7 @@
 #include <queue>
 #include <string>
 #include <thread>
+#include "recording_config.h"
 #include "device_context.h"
 #include "packet_capturer/packet_capturer.h"
 #include "process_chain/process_chain.h"
@@ -20,16 +21,6 @@ extern "C" {
 #include <libswscale/swscale.h>
 }
 
-struct RecordingConfig {
-    std::string videoAddress;
-    std::string audioAddress;
-    std::string outputFilename;
-    std::optional<std::tuple<int, int, int, int>>
-            cropWindow;            // x1,y1,x2,y2 from top left
-    float rescaleValue = 1.0;  // output resolution will be calculated as
-    // (height,width)//rescaleValue
-    int framerate = 30;
-};
 
 // Settings
 const AVSampleFormat OUTPUT_AUDIO_SAMPLE_FMT = AV_SAMPLE_FMT_FLTP;
@@ -96,12 +87,10 @@ class RecordingServiceImpl {
     static std::tuple<std::string, std::string> unpackDeviceAddress(
             const std::string &deviceAddress);
 
-    static std::tuple<int, int> get_scaled_resolution(int inputWidth,
-                                                      int inputHeight,
-                                                      float scale);
-
-    static std::tuple<int, int, int, int>
-    get_output_window(int inputWidth, int inputHeight, RecordingConfig config);
+    static std::tuple<int, int, int, int, int, int> get_output_image_parameters(
+            int deviceInputWidth,
+            int deviceInputHeight,
+            const RecordingConfig &config);
 
     // recording_service.cpp
     void start_capture_loop(PacketCapturer *capturer);
@@ -109,7 +98,7 @@ class RecordingServiceImpl {
     void start_transcode_process(ProcessChain *transcodeChain);
 
 public:
-    RecordingServiceImpl(RecordingConfig config);
+    explicit RecordingServiceImpl(const RecordingConfig& config);
 
     int start_recording();
 

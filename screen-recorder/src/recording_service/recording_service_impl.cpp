@@ -174,16 +174,17 @@ int RecordingServiceImpl::stop_recording() {
 ///   - Windows
 ///       videoAddress:"dshow:...."
 ///       audioAddress:"dshow:...."
-RecordingServiceImpl::RecordingServiceImpl(RecordingConfig config) {
+RecordingServiceImpl::RecordingServiceImpl(const RecordingConfig &config) {
     recordingStatus = IDLE;
+    pauseTimestamp = 0;
 
     // Initialize the LibAV devices
     avdevice_register_all();
 
     // Unpack device addresses
     std::string videoDeviceID, videoURL, audioDeviceID, audioURL;
-    std::tie(videoDeviceID, videoURL) = unpackDeviceAddress(config.videoAddress);
-    std::tie(audioDeviceID, audioURL) = unpackDeviceAddress(config.audioAddress);
+    std::tie(videoDeviceID, videoURL) = unpackDeviceAddress(config.getVideoAddress());
+    std::tie(audioDeviceID, audioURL) = unpackDeviceAddress(config.getAudioAddress());
 
     // Open A/V devices (demuxers)
     if (videoDeviceID == audioDeviceID) {
@@ -199,14 +200,16 @@ RecordingServiceImpl::RecordingServiceImpl(RecordingConfig config) {
     }
 
     // Init muxer
-    outputMuxer = DeviceContext::init_muxer(config.outputFilename);
+    outputMuxer = DeviceContext::init_muxer(config.getOutputFilename());
 
     // Init video rings
     auto *videoDecoderRing = new DecoderChainRing(mainDevice->getVideoStream());
 
-    auto[outputWidth, outputHeight, originX, originY] =
-    get_output_window(videoDecoderRing->getDecoderContext()->width,
-                      videoDecoderRing->getDecoderContext()->height, config);
+    auto[encoderOutputWidth, encoderOutputHeight, scalerOutputWidth, scalerOutputHeight, cropOriginX, cropOriginY] =
+    get_output_image_parameters(videoDecoderRing->getDecoderContext()->width,
+                                videoDecoderRing->getDecoderContext()->height, config);
+
+
     EncoderConfig videoEncoderConfig = {
             .codecID = AV_CODEC_ID_H264,
             .codecType = AVMEDIA_TYPE_VIDEO,
@@ -216,8 +219,8 @@ RecordingServiceImpl::RecordingServiceImpl(RecordingConfig config) {
                                            "keyint=60:min-keyint=60:scenecut=0:force-cfr=1"},
                                {"tune",    "zerolatency"}},
             .bitRate = OUTPUT_VIDEO_BIT_RATE,
-            .height = outputHeight,
-            .width = outputWidth,
+            .height = encoderOutputHeight,
+            .width = encoderOutputWidth,
             .pixelFormat = OUTPUT_VIDEO_PIXEL_FMT,
             .frameRate = av_guess_frame_rate(mainDevice->getContext(),
                                              mainDevice->getVideoStream(), nullptr)
@@ -228,31 +231,28 @@ RecordingServiceImpl::RecordingServiceImpl(RecordingConfig config) {
 
     std::vector<FilterChainRing *> videoFilterRings;
 
-    auto[scaledWidth, scaledHeight] = RecordingServiceImpl::get_scaled_resolution(
-            videoDecoderRing->getDecoderContext()->width,
-            videoDecoderRing->getDecoderContext()->height, config.rescaleValue);
     SWScaleConfig swScaleConfig = {
             .inputWidth = videoDecoderRing->getDecoderContext()->width,
             .inputHeight = videoDecoderRing->getDecoderContext()->height,
             .inputPixelFormat = videoDecoderRing->getDecoderContext()->pix_fmt,
-            .outputWidth = scaledWidth,
-            .outputHeight = scaledHeight,
+            .outputWidth = scalerOutputWidth,
+            .outputHeight = scalerOutputHeight,
             .outputPixelFormat = videoEncoderRing->getEncoderContext()->pix_fmt,
     };
     auto *swScaleFilterRing = new SWScaleFilterRing(swScaleConfig);
     videoFilterRings.push_back(swScaleFilterRing);
 
-    if (config.cropWindow) {
+    if (config.getCaptureRegion()) {
         VFCropConfig vfCropConfig = {
-                .inputWidth = scaledWidth,
-                .inputHeight = scaledHeight,
+                .inputWidth = scalerOutputWidth,
+                .inputHeight = scalerOutputHeight,
                 .inputPixelFormat = videoEncoderRing->getEncoderContext()->pix_fmt,
                 .inputTimeBase = mainDevice->getVideoStream()->time_base,
                 .inputAspectRatio = mainDevice->getVideoStream()->sample_aspect_ratio,
-                .originX = originX,
-                .originY = originY,
-                .outputWidth = outputWidth,
-                .outputHeight = outputHeight,
+                .originX = cropOriginX,
+                .originY = cropOriginY,
+                .outputWidth = encoderOutputWidth,
+                .outputHeight = encoderOutputHeight,
                 .outputPixelFormat = videoEncoderRing->getEncoderContext()->pix_fmt,
         };
         auto *vfCropFilterRing = new VFCropFilterRing(vfCropConfig);

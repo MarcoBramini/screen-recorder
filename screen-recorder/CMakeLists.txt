@@ -9,44 +9,49 @@ find_package(Threads REQUIRED)
 find_package(fmt)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBAV REQUIRED IMPORTED_TARGET
-    libavdevice
-    libavfilter
-    libavformat
-    libavcodec
-    libswresample
-    libswscale
-    libavutil
-)
+        libavdevice
+        libavfilter
+        libavformat
+        libavcodec
+        libswresample
+        libswscale
+        libavutil
+        )
 
 # SOURCE FILES
-set(SOURCES src/recording_service/recording_service_impl.cpp
-src/recording_service/recording_service_impl.h
-src/recording_service/recording_utils.cpp
-src/recording_service/device_context.cpp
-src/recording_service/device_context.h
-src/recording_service/error.cpp
-src/recording_service/error.h
-src/recording_service/process_chain/process_chain.cpp
-src/recording_service/process_chain/process_chain.h
-src/recording_service/process_chain/decoder_ring.cpp
-src/recording_service/process_chain/decoder_ring.h
-src/recording_service/process_chain/muxer_ring.cpp
-src/recording_service/process_chain/muxer_ring.h
-src/recording_service/process_chain/encoder_ring.cpp
-src/recording_service/process_chain/encoder_ring.h
-src/recording_service/process_chain/filter_ring.cpp
-src/recording_service/process_chain/filter_ring.h
-src/recording_service/process_chain/process_context.cpp
-src/recording_service/process_chain/process_context.h
-src/recording_service/process_chain/swscale_filter_ring.cpp
-src/recording_service/process_chain/swscale_filter_ring.h
-src/recording_service/process_chain/swresample_filter_ring.cpp
-src/recording_service/process_chain/swresample_filter_ring.h
-src/recording_service/process_chain/vfcrop_filter_ring.cpp
-src/recording_service/process_chain/vfcrop_filter_ring.h
-src/recording_service/packet_capturer/packet_capturer.cpp
-src/recording_service/packet_capturer/packet_capturer.h
-)
+set(SOURCES
+        src/device_service/input_device.cpp
+        src/device_service/input_device.h
+        src/recording_service/recording_service_impl.cpp
+        src/recording_service/recording_service_impl.h
+        src/recording_service/recording_config.cpp
+        src/recording_service/recording_config.h
+        src/recording_service/recording_utils.cpp
+        src/recording_service/device_context.cpp
+        src/recording_service/device_context.h
+        src/recording_service/error.cpp
+        src/recording_service/error.h
+        src/recording_service/process_chain/process_chain.cpp
+        src/recording_service/process_chain/process_chain.h
+        src/recording_service/process_chain/decoder_ring.cpp
+        src/recording_service/process_chain/decoder_ring.h
+        src/recording_service/process_chain/muxer_ring.cpp
+        src/recording_service/process_chain/muxer_ring.h
+        src/recording_service/process_chain/encoder_ring.cpp
+        src/recording_service/process_chain/encoder_ring.h
+        src/recording_service/process_chain/filter_ring.cpp
+        src/recording_service/process_chain/filter_ring.h
+        src/recording_service/process_chain/process_context.cpp
+        src/recording_service/process_chain/process_context.h
+        src/recording_service/process_chain/swscale_filter_ring.cpp
+        src/recording_service/process_chain/swscale_filter_ring.h
+        src/recording_service/process_chain/swresample_filter_ring.cpp
+        src/recording_service/process_chain/swresample_filter_ring.h
+        src/recording_service/process_chain/vfcrop_filter_ring.cpp
+        src/recording_service/process_chain/vfcrop_filter_ring.h
+        src/recording_service/packet_capturer/packet_capturer.cpp
+        src/recording_service/packet_capturer/packet_capturer.h
+        )
 if (${APPLE})
     set(SOURCES
             ${SOURCES}

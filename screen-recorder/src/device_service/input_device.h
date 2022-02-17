@@ -19,15 +19,16 @@ public:
                                                                            deviceID(std::move(deviceID)),
                                                                            name(std::move(name)) {};
 
-    std::string getURL() { return this->url; };
+    std::string getURL();
 
-    std::string getName() { return this->name; };
+    std::string getName();
 
-    std::string getDeviceID() { return this->deviceID; };
+    std::string getDeviceID();
 
-    std::string toString() {
-        return fmt::format("URL: {} | DeviceID: {} | Name: {}", this->url, this->deviceID, this->name);
-    };
+    std::string getDeviceAddress();
+
+
+    std::string toString();
 };
 
 
