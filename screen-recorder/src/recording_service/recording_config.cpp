@@ -33,6 +33,10 @@ void RecordingConfig::setCaptureRegion(int x, int y, int width, int height) {
     captureRegion = {x, y, width, height};
 }
 
+void RecordingConfig::resetCaptureRegion() {
+    captureRegion.reset();
+}
+
 int RecordingConfig::getFramerate() const {
     return framerate;
 }

@@ -33,6 +33,8 @@ public:
 
     void setCaptureRegion(int x, int y, int width, int height);
 
+    void resetCaptureRegion();
+
     static std::vector<std::tuple<int, int>> getOutputResolutionsChoices(int inputWidth, int inputHeight);
 
     [[nodiscard]] const std::optional<std::tuple<int, int>> &getOutputResolution() const;

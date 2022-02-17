@@ -21,6 +21,8 @@ class BackEnd : public QObject
     Q_PROPERTY(QList<QString> outputResolutions READ getOutputResolutions CONSTANT)
     Q_PROPERTY(int selectedOutputResolutionIndex READ getSelectedOutputResolutionIndex WRITE setSelectedOutputResolutionIndex NOTIFY selectedOutputResolutionIndexChanged)
     Q_PROPERTY(QVariantMap selectedCaptureRegion READ getSelectedCaptureRegion WRITE setSelectedCaptureRegion NOTIFY selectedCaptureRegionChanged)
+    Q_PROPERTY(QList<QString> framerates READ getFramerates CONSTANT)
+    Q_PROPERTY(int selectedFramerateIndex READ getSelectedFramerateIndex WRITE setSelectedFramerateIndex NOTIFY selectedFramerateIndexChanged)
 
     QML_ELEMENT
 
@@ -36,8 +38,12 @@ class BackEnd : public QObject
 
     QVariantMap m_selectedCaptureRegion;
 
+    std::vector<int> availableFramerates;
+    int m_selectedFramerateIndex;
+
     RecordingConfig config;
 
+    void updateAvailableOutputResolutions();
 public:
     explicit BackEnd(QObject *parent = nullptr);
 
@@ -62,6 +68,7 @@ public:
 
     // Output resolution
     QList<QString> getOutputResolutions();
+
     int getSelectedOutputResolutionIndex();
 
     void setSelectedOutputResolutionIndex(int index);
@@ -71,12 +78,22 @@ public:
 
     void setSelectedCaptureRegion(QVariantMap captureRegion);
 
+    Q_INVOKABLE void resetCaptureRegion();
+
+    // Framerate
+    QList<QString> getFramerates();
+
+    int getSelectedFramerateIndex();
+
+    void setSelectedFramerateIndex(int index);
+
 signals:
     void outputPathChanged();
     void selectedVideoDeviceIndexChanged();
     void selectedAudioDeviceIndexChanged();
     void selectedOutputResolutionIndexChanged();
     void selectedCaptureRegionChanged();
+    void selectedFramerateIndexChanged();
 };
 
 #endif // BACKEND_H

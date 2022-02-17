@@ -16,47 +16,17 @@ Window {
     color: "#00000000"
     flags: "FramelessWindowHint"
 
-    ScreenRegionSelector {
-        id: screenRegionSelector
-        onCaptureRegionSelected: {
-            // Propagate capture region change
-            var captureRegion = {}
-            captureRegion.x = x
-            captureRegion.y = y
-            captureRegion.width = width
-            captureRegion.height = height
-            backend.selectedCaptureRegion = captureRegion
-
-            captureRegionSelectButton.update()
-            // Update avaialble resolutions
-            outputResolutionSelect.model = backend.outputResolutions
-        }
-    }
-
     Rectangle {
         id: container
         width: parent.width
         height: parent.height
-        visible: true
         color: "#595959"
         radius: 30
-        border.color: "#000000"
         border.width: 0
         layer.enabled: false
 
-        FolderDialog {
-            id: folderDialog
-            folder: backend.outputPath
-            onFolderChanged: {
-                outputPathValue.text = folder
-                backend.outputPath = folder
-            }
-        }
-
         Column {
             id: column
-            y: 101
-            visible: true
             anchors.fill: parent
             anchors.rightMargin: 16
             anchors.leftMargin: 16
@@ -64,18 +34,14 @@ Window {
             Row {
                 id: row
                 height: 61
-                visible: true
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.top: parent.top
                 anchors.topMargin: 4
-                anchors.rightMargin: 0
-                anchors.leftMargin: 0
 
                 Label {
                     id: outputPathLabel
-                    visible: true
-                    text: qsTr("Output Path")
+                    text: "Output Path"
                     anchors.verticalCenter: parent.verticalCenter
                     Material.foreground: "white"
                 }
@@ -83,8 +49,7 @@ Window {
                 Label {
                     id: outputPathValue
                     width: 300
-                    visible: true
-                    text: qsTr("C:/Users/...")
+                    text: backend.outputPath
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.right: outputPathButton.left
                     horizontalAlignment: Text.AlignRight
@@ -97,16 +62,23 @@ Window {
                 Button {
                     id: outputPathButton
                     width: 116
-                    text: qsTr("Browse")
+                    text: "Browse"
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.right: parent.right
-                    anchors.rightMargin: 0
 
                     Connections {
                         target: outputPathButton
                         onClicked: {
                             folderDialog.visible = true
                         }
+                    }
+                }
+
+                FolderDialog {
+                    id: folderDialog
+                    folder: backend.outputPath
+                    onFolderChanged: {
+                        backend.outputPath = folder
                     }
                 }
             }
@@ -130,22 +102,19 @@ Window {
                     width: 250
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.right: parent.right
-                    anchors.rightMargin: 0
+
                     model: backend.videoDevices
+                    currentIndex: backend.selectedVideoDeviceIndex
                     onCurrentIndexChanged: {
-                        console.log(currentIndex)
                         backend.selectedVideoDeviceIndex = currentIndex
                     }
                 }
                 anchors.topMargin: 16
-                anchors.rightMargin: 0
-                anchors.leftMargin: 0
             }
 
             Row {
                 id: row2
                 height: 61
-                visible: true
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.top: row1.bottom
@@ -161,16 +130,14 @@ Window {
                     width: 250
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.right: parent.right
-                    anchors.rightMargin: 0
+
                     model: backend.audioDevices
+                    currentIndex: backend.selectedAudioDeviceIndex
                     onCurrentIndexChanged: {
-                        console.log(currentIndex)
                         backend.selectedAudioDeviceIndex = currentIndex
                     }
                 }
                 anchors.topMargin: 16
-                anchors.leftMargin: 0
-                anchors.rightMargin: 0
             }
 
             Row {
@@ -180,15 +147,12 @@ Window {
                 anchors.right: parent.right
                 anchors.top: row2.bottom
                 anchors.topMargin: 16
-                anchors.rightMargin: 0
-                anchors.leftMargin: 0
 
                 Label {
                     id: outputResolutionLabel
                     text: qsTr("Output Resolution")
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.left: parent.left
-                    anchors.leftMargin: 0
                     Material.foreground: "white"
                 }
 
@@ -198,10 +162,10 @@ Window {
                     height: 48
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.right: parent.right
-                    anchors.rightMargin: 0
+
                     model: backend.outputResolutions
+                    currentIndex: backend.selectedOutputResolutionIndex
                     onCurrentIndexChanged: {
-                        console.log(currentIndex)
                         backend.selectedOutputResolutionIndex = currentIndex
                     }
                 }
@@ -213,24 +177,21 @@ Window {
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.top: row3.bottom
+                anchors.topMargin: 16
+
                 Label {
                     id: captureRegionLabel
                     text: qsTr("Capture Region")
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.left: parent.left
-                    anchors.leftMargin: 0
                     Material.foreground: "white"
                 }
 
                 Button {
                     id: captureRegionSelectButton
                     width: 116
-                    text: {
-                        if (Object.keys(
-                                    backend.selectedCaptureRegion).length !== 0)
-                            return "UPDATE"
-                        return qsTr("SELECT")
-                    }
+                    text: "SELECT"
+
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.right: captureRegionResetButton.left
                     anchors.rightMargin: 16
@@ -244,22 +205,42 @@ Window {
                 Button {
                     id: captureRegionResetButton
                     width: 116
-                    text: qsTr("RESET")
+                    text: "RESET"
+
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.right: parent.right
-                    hoverEnabled: true
+
                     enabled: false
-                    autoRepeat: false
-                    autoExclusive: false
-                    checked: false
-                    checkable: false
-                    highlighted: false
-                    flat: false
-                    anchors.rightMargin: 0
+
+                    Connections {
+                        target: captureRegionResetButton
+                        onClicked: function () {
+                            captureRegionSelectButton.text = "SELECT"
+                            captureRegionResetButton.enabled = false
+                            backend.resetCaptureRegion()
+                            screenRegionSelector.resetCaptureRegion()
+                            outputResolutionSelect.model = backend.outputResolutions
+                        }
+                    }
                 }
-                anchors.topMargin: 16
-                anchors.leftMargin: 0
-                anchors.rightMargin: 0
+
+                ScreenRegionSelector {
+                    id: screenRegionSelector
+                    onCaptureRegionSelected: function (x, y, width, height) {
+                        // Propagate capture region change
+                        var captureRegion = {}
+                        captureRegion.x = x
+                        captureRegion.y = y
+                        captureRegion.width = width
+                        captureRegion.height = height
+                        backend.selectedCaptureRegion = captureRegion
+
+                        // Update widgets
+                        outputResolutionSelect.model = backend.outputResolutions
+                        captureRegionSelectButton.text = "UPDATE"
+                        captureRegionResetButton.enabled = true
+                    }
+                }
             }
 
             Row {
@@ -270,10 +251,9 @@ Window {
                 anchors.top: row4.bottom
                 Label {
                     id: framerateLabel
-                    text: qsTr("Framerate")
+                    text: "Framerate"
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.left: parent.left
-                    anchors.leftMargin: 0
                     Material.foreground: "white"
                 }
 
@@ -283,12 +263,13 @@ Window {
                     height: 48
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.right: parent.right
-                    model: ["30", "24", "20", "60"]
-                    anchors.rightMargin: 0
+                    model: backend.framerates
+                    currentIndex: backend.selectedFramerateIndex
+                    onCurrentIndexChanged: {
+                        backend.selectedFramerateIndex = currentIndex
+                    }
                 }
                 anchors.topMargin: 16
-                anchors.leftMargin: 0
-                anchors.rightMargin: 0
             }
         }
     }

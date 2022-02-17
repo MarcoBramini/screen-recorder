@@ -3,19 +3,24 @@
 #include <QGuiApplication>
 #include <QScreen>
 
+std::tuple<int,int> getScreenResolution() {
+    QScreen *primaryScreen = QGuiApplication::primaryScreen();
+    QRect screenGeometry = primaryScreen->geometry();
+    return {screenGeometry.width(), screenGeometry.height()};
+}
+
 BackEnd::BackEnd(QObject *parent) :
     QObject(parent)
 {
     availableVideoDevices = DeviceService::get_input_video_devices();
     availableAudioDevices = DeviceService::get_input_audio_devices();
 
-    QScreen *primaryScreen = QGuiApplication::primaryScreen();
-    QRect screenGeometry = primaryScreen->geometry();
-    availableOutputResolutions = RecordingConfig::getOutputResolutionsChoices(screenGeometry.width(), screenGeometry.height());
+    auto [width, height] = getScreenResolution();
+    availableOutputResolutions = RecordingConfig::getOutputResolutionsChoices(width, height);
 
     config = {};
 
-    // Init output patj
+    // Init output path
     QStringList locations = QStandardPaths::standardLocations(QStandardPaths::DesktopLocation);
     setOutputPath(locations[0]);
 
@@ -24,13 +29,11 @@ BackEnd::BackEnd(QObject *parent) :
     setSelectedAudioDeviceIndex(0);
 
     // Init framerate
-
-    // Init capture region
+    availableFramerates = {20,24,30,60};
+    setSelectedFramerateIndex(2);
 
     // Init output resolution
     setSelectedOutputResolutionIndex(0);
-
-
 }
 
 QString BackEnd::getOutputPath() {
@@ -104,6 +107,7 @@ int BackEnd::getSelectedOutputResolutionIndex() {
 }
 
 void BackEnd::setSelectedOutputResolutionIndex(int index) {
+    std::cout<<"asd"<<std::endl;
     if (index == m_selectedOutputResolutionIndex) return;
 
     m_selectedOutputResolutionIndex = index;
@@ -115,16 +119,57 @@ QVariantMap BackEnd::getSelectedCaptureRegion() {
     return m_selectedCaptureRegion;
 }
 
+// Updates the available resolutions and resets the user choice to default
+void BackEnd::updateAvailableOutputResolutions() {
+    int width,height;
+    if (config.getCaptureRegion().has_value()) {
+        std::tie(std::ignore,std::ignore,width, height) = config.getCaptureRegion().value();
+    } else {
+        std::tie(width, height) = getScreenResolution();
+    }
+    availableOutputResolutions = RecordingConfig::getOutputResolutionsChoices(width, height);
+    setSelectedOutputResolutionIndex(0);
+}
+
 void BackEnd::setSelectedCaptureRegion(QVariantMap captureRegion) {
     if (captureRegion == m_selectedCaptureRegion) return;
 
     m_selectedCaptureRegion = captureRegion;
     config.setCaptureRegion(captureRegion["x"].toInt(),captureRegion["y"].toInt(),captureRegion["width"].toInt(), captureRegion["height"].toInt());
 
-    // Update output resolution
-    auto [x,y,width, height] = config.getCaptureRegion().value();
-    availableOutputResolutions = RecordingConfig::getOutputResolutionsChoices(width, height);
-    setSelectedOutputResolutionIndex(2);
+    updateAvailableOutputResolutions();
 
-    emit selectedOutputResolutionIndexChanged();
+    emit selectedCaptureRegionChanged();
+}
+
+void BackEnd::resetCaptureRegion() {
+    m_selectedCaptureRegion = {};
+    config.resetCaptureRegion();
+
+    updateAvailableOutputResolutions();
+
+    emit selectedCaptureRegionChanged();
+}
+
+QList<QString> BackEnd::getFramerates() {
+    QList<QString> output;
+    for (auto f:availableFramerates) {
+        output.emplaceBack(std::to_string(f).c_str());
+    }
+
+    return output;
+}
+
+int BackEnd::getSelectedFramerateIndex() {
+    return m_selectedFramerateIndex;
+}
+
+void BackEnd::setSelectedFramerateIndex(int index) {
+    if (index == m_selectedFramerateIndex) return;
+
+    m_selectedFramerateIndex = index;
+
+    config.setFramerate(availableFramerates[index]);
+
+    emit selectedFramerateIndexChanged();
 }

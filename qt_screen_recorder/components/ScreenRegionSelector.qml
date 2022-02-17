@@ -11,6 +11,14 @@ Window {
     //flags: "FramelessWindowHint"
     signal captureRegionSelected(real x, real y, real width, real height)
 
+    function resetCaptureRegion() {
+        captureRegion.visible = false
+        captureRegion.x = 0
+        captureRegion.y = 0
+        captureRegion.width = 0
+        captureRegion.height = 0
+    }
+
     Item {
         anchors.fill: parent
 
@@ -18,10 +26,12 @@ Window {
         Keys.onEscapePressed: {
             // Revert captureRegion
             var oldCaptureRegion = backend.selectedCaptureRegion
-            captureRegion.x = oldCaptureRegion.x
-            captureRegion.y = oldCaptureRegion.y
-            captureRegion.width = oldCaptureRegion.width
-            captureRegion.height = oldCaptureRegion.height
+            if (Object.keys(oldCaptureRegion).length !== 0) {
+                captureRegion.x = oldCaptureRegion.x
+                captureRegion.y = oldCaptureRegion.y
+                captureRegion.width = oldCaptureRegion.width
+                captureRegion.height = oldCaptureRegion.height
+            }
 
             window.close()
         }
