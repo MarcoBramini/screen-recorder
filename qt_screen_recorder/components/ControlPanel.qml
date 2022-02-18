@@ -9,7 +9,6 @@ Rectangle {
     visible: true
     color: "#595959"
     radius: 30
-    border.color: "#b9b0b0"
     border.width: 0
 
     ConfigPanel {
@@ -74,7 +73,10 @@ Rectangle {
 
             Connections {
                 target: recButton
-                onClicked: controlPanel.state = "recording"
+                onClicked: {
+                    controlPanel.state = "recording"
+                    backend.startRecording()
+                }
             }
         }
         RoundButton {
@@ -125,7 +127,10 @@ Rectangle {
 
             Connections {
                 target: stopButton
-                onClicked: controlPanel.state = ""
+                onClicked: {
+                    controlPanel.state = ""
+                    backend.startRecording()
+                }
             }
         }
 

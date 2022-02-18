@@ -85,20 +85,30 @@ int RecordingServiceImpl::start_recording() {
 
     // Call start_recording_loop in a new thread
     videoCaptureThread =
-            std::thread([this]() { start_capture_loop(mainDeviceCapturer); });
+    std::thread([this]() {
+        start_capture_loop(mainDeviceCapturer);
+    });
 
     if (mainDevice != auxDevice) {
         audioCaptureThread =
-                std::thread([this]() { start_capture_loop(auxDeviceCapturer); });
+        std::thread([this]() {
+            start_capture_loop(auxDeviceCapturer);
+        });
     }
 
     capturedVideoPacketsProcessThread =
-            std::thread([this]() { start_transcode_process(videoTranscodeChain); });
+    std::thread([this]() {
+        start_transcode_process(videoTranscodeChain);
+    });
 
     capturedAudioPacketsProcessThread =
-            std::thread([this]() { start_transcode_process(audioTranscodeChain); });
+    std::thread([this]() {
+        start_transcode_process(audioTranscodeChain);
+    });
 
-    recordingStatsThread = std::thread([this]() { rec_stats_loop(); });
+    recordingStatsThread = std::thread([this]() {
+        rec_stats_loop();
+    });
 
     return 0;
 }
@@ -106,8 +116,8 @@ int RecordingServiceImpl::start_recording() {
 int RecordingServiceImpl::pause_recording() {
     // Set pauseTimestamp
     pauseTimestamp =
-            duration_cast<microseconds>(system_clock::now().time_since_epoch())
-                    .count();
+        duration_cast<microseconds>(system_clock::now().time_since_epoch())
+        .count();
 
     // Set cond var isPaused to true
     recordingStatus = PAUSE;
@@ -118,8 +128,8 @@ int RecordingServiceImpl::pause_recording() {
 int RecordingServiceImpl::resume_recording() {
     // Increment pausedTime by resumeTimestamp - pauseTimestamp interval
     int64_t resumeTimestamp =
-            duration_cast<microseconds>(system_clock::now().time_since_epoch())
-                    .count();
+        duration_cast<microseconds>(system_clock::now().time_since_epoch())
+        .count();
 
     mainDeviceCapturer->add_pause_duration(resumeTimestamp - pauseTimestamp);
     auxDeviceCapturer->add_pause_duration(resumeTimestamp - pauseTimestamp);
@@ -189,71 +199,74 @@ RecordingServiceImpl::RecordingServiceImpl(const RecordingConfig &config) {
     // Open A/V devices (demuxers)
     if (videoDeviceID == audioDeviceID) {
         mainDevice =
-                DeviceContext::init_demuxer(videoDeviceID, videoURL, audioURL,
-                                            get_device_options(videoDeviceID, config));
+            DeviceContext::init_demuxer(videoDeviceID, videoURL, audioURL,
+                                        get_device_options(videoDeviceID, config));
         auxDevice = mainDevice;
     } else {
         mainDevice = DeviceContext::init_demuxer(
-                videoDeviceID, videoURL, "", get_device_options(videoDeviceID, config));
+                         videoDeviceID, videoURL, "", get_device_options(videoDeviceID, config));
         auxDevice = DeviceContext::init_demuxer(
-                audioDeviceID, "", audioURL, get_device_options(audioDeviceID, config));
+                        audioDeviceID, "", audioURL, get_device_options(audioDeviceID, config));
     }
 
     // Init muxer
-    outputMuxer = DeviceContext::init_muxer(config.getOutputFilename());
+    outputMuxer = DeviceContext::init_muxer(config.getOutputPath());
 
     // Init video rings
     auto *videoDecoderRing = new DecoderChainRing(mainDevice->getVideoStream());
 
     auto[encoderOutputWidth, encoderOutputHeight, scalerOutputWidth, scalerOutputHeight, cropOriginX, cropOriginY] =
-    get_output_image_parameters(videoDecoderRing->getDecoderContext()->width,
-                                videoDecoderRing->getDecoderContext()->height, config);
+        get_output_image_parameters(videoDecoderRing->getDecoderContext()->width,
+                                    videoDecoderRing->getDecoderContext()->height, config);
 
 
     EncoderConfig videoEncoderConfig = {
-            .codecID = AV_CODEC_ID_H264,
-            .codecType = AVMEDIA_TYPE_VIDEO,
-            .encoderOptions = {{"profile", "main"},
-                               {"preset",  "ultrafast"},
-                               {"x264-params",
-                                           "keyint=60:min-keyint=60:scenecut=0:force-cfr=1"},
-                               {"tune",    "zerolatency"}},
-            .bitRate = OUTPUT_VIDEO_BIT_RATE,
-            .height = encoderOutputHeight,
-            .width = encoderOutputWidth,
-            .pixelFormat = OUTPUT_VIDEO_PIXEL_FMT,
-            .frameRate = av_guess_frame_rate(mainDevice->getContext(),
-                                             mainDevice->getVideoStream(), nullptr)
-                    .num};
+        .codecID = AV_CODEC_ID_H264,
+        .codecType = AVMEDIA_TYPE_VIDEO,
+        .encoderOptions = {{"profile", "main"},
+            {"preset",  "ultrafast"},
+            {   "x264-params",
+                "keyint=60:min-keyint=60:scenecut=0:force-cfr=1"
+            },
+            {"tune",    "zerolatency"}
+        },
+        .bitRate = OUTPUT_VIDEO_BIT_RATE,
+        .height = encoderOutputHeight,
+        .width = encoderOutputWidth,
+        .pixelFormat = OUTPUT_VIDEO_PIXEL_FMT,
+        .frameRate = av_guess_frame_rate(mainDevice->getContext(),
+                                         mainDevice->getVideoStream(), nullptr)
+        .num
+    };
     auto *videoEncoderRing =
-            new EncoderChainRing(mainDevice->getVideoStream(),
-                                 outputMuxer->getVideoStream(), videoEncoderConfig);
+        new EncoderChainRing(mainDevice->getVideoStream(),
+                             outputMuxer->getVideoStream(), videoEncoderConfig);
 
     std::vector<FilterChainRing *> videoFilterRings;
 
     SWScaleConfig swScaleConfig = {
-            .inputWidth = videoDecoderRing->getDecoderContext()->width,
-            .inputHeight = videoDecoderRing->getDecoderContext()->height,
-            .inputPixelFormat = videoDecoderRing->getDecoderContext()->pix_fmt,
-            .outputWidth = scalerOutputWidth,
-            .outputHeight = scalerOutputHeight,
-            .outputPixelFormat = videoEncoderRing->getEncoderContext()->pix_fmt,
+        .inputWidth = videoDecoderRing->getDecoderContext()->width,
+        .inputHeight = videoDecoderRing->getDecoderContext()->height,
+        .inputPixelFormat = videoDecoderRing->getDecoderContext()->pix_fmt,
+        .outputWidth = scalerOutputWidth,
+        .outputHeight = scalerOutputHeight,
+        .outputPixelFormat = videoEncoderRing->getEncoderContext()->pix_fmt,
     };
     auto *swScaleFilterRing = new SWScaleFilterRing(swScaleConfig);
     videoFilterRings.push_back(swScaleFilterRing);
 
     if (config.getCaptureRegion()) {
         VFCropConfig vfCropConfig = {
-                .inputWidth = scalerOutputWidth,
-                .inputHeight = scalerOutputHeight,
-                .inputPixelFormat = videoEncoderRing->getEncoderContext()->pix_fmt,
-                .inputTimeBase = mainDevice->getVideoStream()->time_base,
-                .inputAspectRatio = mainDevice->getVideoStream()->sample_aspect_ratio,
-                .originX = cropOriginX,
-                .originY = cropOriginY,
-                .outputWidth = encoderOutputWidth,
-                .outputHeight = encoderOutputHeight,
-                .outputPixelFormat = videoEncoderRing->getEncoderContext()->pix_fmt,
+            .inputWidth = scalerOutputWidth,
+            .inputHeight = scalerOutputHeight,
+            .inputPixelFormat = videoEncoderRing->getEncoderContext()->pix_fmt,
+            .inputTimeBase = mainDevice->getVideoStream()->time_base,
+            .inputAspectRatio = mainDevice->getVideoStream()->sample_aspect_ratio,
+            .originX = cropOriginX,
+            .originY = cropOriginY,
+            .outputWidth = encoderOutputWidth,
+            .outputHeight = encoderOutputHeight,
+            .outputPixelFormat = videoEncoderRing->getEncoderContext()->pix_fmt,
         };
         auto *vfCropFilterRing = new VFCropFilterRing(vfCropConfig);
         videoFilterRings.push_back(vfCropFilterRing);
@@ -264,31 +277,32 @@ RecordingServiceImpl::RecordingServiceImpl(const RecordingConfig &config) {
 
     int channels = auxDevice->getAudioStream()->codecpar->channels;
     EncoderConfig audioEncoderConfig = {
-            .codecID = AV_CODEC_ID_AAC,
-            .codecType = AVMEDIA_TYPE_AUDIO,
-            .bitRate = OUTPUT_AUDIO_BIT_RATE,
-            .channels = channels,
-            .channelLayout = av_get_default_channel_layout(channels),
-            .sampleRate = auxDevice->getAudioStream()->codecpar->sample_rate,
-            .sampleFormat = OUTPUT_AUDIO_SAMPLE_FMT,
-            .strictStdCompliance = FF_COMPLIANCE_NORMAL};
+        .codecID = AV_CODEC_ID_AAC,
+        .codecType = AVMEDIA_TYPE_AUDIO,
+        .bitRate = OUTPUT_AUDIO_BIT_RATE,
+        .channels = channels,
+        .channelLayout = av_get_default_channel_layout(channels),
+        .sampleRate = auxDevice->getAudioStream()->codecpar->sample_rate,
+        .sampleFormat = OUTPUT_AUDIO_SAMPLE_FMT,
+        .strictStdCompliance = FF_COMPLIANCE_NORMAL
+    };
     auto *audioEncoderRing =
-            new EncoderChainRing(auxDevice->getAudioStream(),
-                                 outputMuxer->getAudioStream(), audioEncoderConfig);
+        new EncoderChainRing(auxDevice->getAudioStream(),
+                             outputMuxer->getAudioStream(), audioEncoderConfig);
 
     SWResampleConfig swResampleConfig = {
-            .inputChannels = audioDecoderRing->getDecoderContext()->channels,
-            .inputChannelLayout = av_get_default_channel_layout(channels),
-            .inputSampleFormat = audioDecoderRing->getDecoderContext()->sample_fmt,
-            .inputSampleRate = audioDecoderRing->getDecoderContext()->sample_rate,
-            .inputFrameSize = audioDecoderRing->getDecoderContext()->frame_size,
-            .inputTimeBase = auxDevice->getAudioStream()->time_base,
-            .outputChannels = audioEncoderRing->getEncoderContext()->channels,
-            .outputChannelLayout = av_get_default_channel_layout(channels),
-            .outputSampleFormat = audioEncoderRing->getEncoderContext()->sample_fmt,
-            .outputSampleRate = audioEncoderRing->getEncoderContext()->sample_rate,
-            .outputFrameSize = audioEncoderRing->getEncoderContext()->frame_size,
-            .outputTimeBase = audioEncoderRing->getEncoderContext()->time_base,
+        .inputChannels = audioDecoderRing->getDecoderContext()->channels,
+        .inputChannelLayout = av_get_default_channel_layout(channels),
+        .inputSampleFormat = audioDecoderRing->getDecoderContext()->sample_fmt,
+        .inputSampleRate = audioDecoderRing->getDecoderContext()->sample_rate,
+        .inputFrameSize = audioDecoderRing->getDecoderContext()->frame_size,
+        .inputTimeBase = auxDevice->getAudioStream()->time_base,
+        .outputChannels = audioEncoderRing->getEncoderContext()->channels,
+        .outputChannelLayout = av_get_default_channel_layout(channels),
+        .outputSampleFormat = audioEncoderRing->getEncoderContext()->sample_fmt,
+        .outputSampleRate = audioEncoderRing->getEncoderContext()->sample_rate,
+        .outputFrameSize = audioEncoderRing->getEncoderContext()->frame_size,
+        .outputTimeBase = audioEncoderRing->getEncoderContext()->time_base,
     };
     auto *swResampleFilterRing = new SWResampleFilterRing(swResampleConfig);
     std::vector<FilterChainRing *> audioFilterRings = {swResampleFilterRing};
@@ -298,52 +312,54 @@ RecordingServiceImpl::RecordingServiceImpl(const RecordingConfig &config) {
 
     // Init transcode process chains
     this->videoTranscodeChain = new ProcessChain(
-            videoDecoderRing, videoFilterRings, videoEncoderRing, muxerRing);
+        videoDecoderRing, videoFilterRings, videoEncoderRing, muxerRing);
     this->audioTranscodeChain = new ProcessChain(
-            audioDecoderRing, audioFilterRings, audioEncoderRing, muxerRing);
+        audioDecoderRing, audioFilterRings, audioEncoderRing, muxerRing);
 
     // Init packet capturers
     mainDeviceCapturer = new PacketCapturer(
-            mainDevice,
+        mainDevice,
+        std::bind(&on_video_packet_capture, std::placeholders::_1,
+                  std::placeholders::_2, videoTranscodeChain),
+        std::bind(&on_audio_packet_capture, std::placeholders::_1,
+                  std::placeholders::_2, audioTranscodeChain));
+
+    if (mainDevice != auxDevice) {
+        auxDeviceCapturer = new PacketCapturer(
+            auxDevice,
             std::bind(&on_video_packet_capture, std::placeholders::_1,
                       std::placeholders::_2, videoTranscodeChain),
             std::bind(&on_audio_packet_capture, std::placeholders::_1,
                       std::placeholders::_2, audioTranscodeChain));
-
-    if (mainDevice != auxDevice) {
-        auxDeviceCapturer = new PacketCapturer(
-                auxDevice,
-                std::bind(&on_video_packet_capture, std::placeholders::_1,
-                          std::placeholders::_2, videoTranscodeChain),
-                std::bind(&on_audio_packet_capture, std::placeholders::_1,
-                          std::placeholders::_2, audioTranscodeChain));
     }
 
     // Init control thread
-    controlThread = std::thread([this]() {
-        std::cout << "Tap Pause(p), Resume(r) or Stop(s)" << std::endl;
-        char c;
-        while (true) {
-            scanf("%c", &c);
-            std::cout << "asdasd" << c << std::endl;
-            if (c == 'p') {
-                std::cout << "pausing" << std::endl;
-                pause_recording();
-                std::cout << "paused" << std::endl;
-            } else if (c == 'r') {
-                std::cout << "resuming" << std::endl;
-                resume_recording();
-                std::cout << "resumed" << std::endl;
-            } else if (c == 's') {
-                std::cout << "stopping" << std::endl;
-                int r = stop_recording();
-                std::cout << "stopped" << r << std::endl;
-                break;
+    if (config.isUseControlThread()) {
+        controlThread = std::thread([this]() {
+            std::cout << "Tap Pause(p), Resume(r) or Stop(s)" << std::endl;
+            char c;
+            while (true) {
+                scanf("%c", &c);
+                std::cout << "asdasd" << c << std::endl;
+                if (c == 'p') {
+                    std::cout << "pausing" << std::endl;
+                    pause_recording();
+                    std::cout << "paused" << std::endl;
+                } else if (c == 'r') {
+                    std::cout << "resuming" << std::endl;
+                    resume_recording();
+                    std::cout << "resumed" << std::endl;
+                } else if (c == 's') {
+                    std::cout << "stopping" << std::endl;
+                    int r = stop_recording();
+                    std::cout << "stopped" << r << std::endl;
+                    break;
+                }
             }
-        }
 
-        std::cout << "exiting" << std::endl;
-    });
+            std::cout << "exiting" << std::endl;
+        });
+    }
 }
 
 void RecordingServiceImpl::wait_recording() {

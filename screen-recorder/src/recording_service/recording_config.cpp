@@ -1,5 +1,7 @@
 #include "recording_config.h"
 #include <fmt/core.h>
+#include <filesystem>
+#include <chrono>
 
 const std::string &RecordingConfig::getVideoAddress() const {
     return videoAddress;
@@ -17,12 +19,26 @@ void RecordingConfig::setAudioAddress(const std::string &address) {
     audioAddress = address;
 }
 
-const std::string &RecordingConfig::getOutputFilename() const {
-    return outputFilename;
+const std::string &RecordingConfig::getOutputDir() const {
+    return outputDir;
 }
 
-void RecordingConfig::setOutputFilename(const std::string &filename) {
-    outputFilename = filename;
+std::string RecordingConfig::getOutputPath() const {
+    std::filesystem::path dir(outputDir);
+
+    auto t = std::time(nullptr);
+    auto tm = *std::localtime(&t);
+
+    std::filesystem::path filename(
+        fmt::format("rec_{}-{}-{}T{}-{}.mp4", tm.tm_year, tm.tm_mon+1, tm.tm_mday, tm.tm_hour, tm.tm_min));
+
+    std::string output = (dir / filename).string();
+
+    return output;
+}
+
+void RecordingConfig::setOutputDir(const std::string &filename) {
+    outputDir = filename;
 }
 
 const std::optional<std::tuple<int, int, int, int>> &RecordingConfig::getCaptureRegion() const {
@@ -68,7 +84,15 @@ const std::optional<std::tuple<int, int>> &RecordingConfig::getOutputResolution(
 }
 
 void RecordingConfig::setOutputResolution(std::tuple<int, int> resolution) {
-    RecordingConfig::outputResolution = resolution;
+    outputResolution = resolution;
+}
+
+bool RecordingConfig::isUseControlThread() const {
+    return useControlThread;
+}
+
+void RecordingConfig::setUseControlThread(bool enabled) {
+    useControlThread = enabled;
 }
 
 

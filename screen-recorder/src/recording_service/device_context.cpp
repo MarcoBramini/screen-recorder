@@ -20,10 +20,10 @@ DeviceContext *DeviceContext::init_demuxer(const std::string &deviceID, const st
     return deviceContext;
 }
 
-DeviceContext *DeviceContext::init_muxer(const std::string &outputFileName) {
+DeviceContext *DeviceContext::init_muxer(const std::string &outputPath) {
     auto *deviceContext = new DeviceContext();
 
-    deviceContext->avfc = init_output_context(outputFileName);
+    deviceContext->avfc = init_output_context(outputPath);
 
     // Add new output video stream
     deviceContext->videoStream = avformat_new_stream(deviceContext->avfc, nullptr);
@@ -121,12 +121,12 @@ int DeviceContext::find_main_stream(AVMediaType streamType) {
 
 
 /// Allocates the output context and open the output file.
-AVFormatContext *DeviceContext::init_output_context(const std::string &outputFileName) {
+AVFormatContext *DeviceContext::init_output_context(const std::string &outputPath) {
     // Build method params for error handling purposes
-    std::map<std::string, std::string> methodParams = {{"outputfileName", outputFileName}};
+    std::map<std::string, std::string> methodParams = {{"outputPath", outputPath}};
 
     AVFormatContext *ctx;
-    int ret = avformat_alloc_output_context2(&ctx, nullptr, nullptr, outputFileName.c_str());
+    int ret = avformat_alloc_output_context2(&ctx, nullptr, nullptr, outputPath.c_str());
     if (ret < 0) {
         throw std::runtime_error(Error::build_error_message(__FUNCTION__, methodParams,
                                                      fmt::format("error during output AVFormatContext allocation ({})",
@@ -137,7 +137,7 @@ AVFormatContext *DeviceContext::init_output_context(const std::string &outputFil
         ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
 
     if (!(ctx->oformat->flags & AVFMT_NOFILE)) {
-        ret = avio_open(&ctx->pb, outputFileName.c_str(), AVIO_FLAG_WRITE);
+        ret = avio_open(&ctx->pb, outputPath.c_str(), AVIO_FLAG_WRITE);
         if (ret < 0) {
             throw std::runtime_error(Error::build_error_message(__FUNCTION__, methodParams, fmt::format(
                     "error opening AVIOContext ({})", Error::unpackAVError(ret))));

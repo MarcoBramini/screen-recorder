@@ -11,10 +11,12 @@
 class RecordingConfig {
     std::string videoAddress;
     std::string audioAddress;
-    std::string outputFilename;
+    std::string outputDir;
+    std::string outputPath;
     std::optional<std::tuple<int, int, int, int>> captureRegion;            // x,y,width,height from top left
     std::optional<std::tuple<int, int>> outputResolution;                // width,height
     int framerate = 30;
+    bool useControlThread = true;     // used to keep the process running without assigning a thread
 
 public:
     [[nodiscard]] const std::string &getVideoAddress() const;
@@ -25,9 +27,11 @@ public:
 
     void setAudioAddress(const std::string &address);
 
-    [[nodiscard]] const std::string &getOutputFilename() const;
+    [[nodiscard]] const std::string &getOutputDir() const;
 
-    void setOutputFilename(const std::string &filename);
+    void setOutputDir(const std::string &filename);
+
+    [[nodiscard]] std::string getOutputPath() const;
 
     [[nodiscard]] const std::optional<std::tuple<int, int, int, int>> &getCaptureRegion() const;
 
@@ -44,6 +48,10 @@ public:
     [[nodiscard]] int getFramerate() const;
 
     void setFramerate(int framerate);
+
+    [[nodiscard]] bool isUseControlThread() const;
+
+    void setUseControlThread(bool enabled);
 };
 
 #endif  // PDS_SCREEN_RECORDING_RECORDINGCONFIG_H

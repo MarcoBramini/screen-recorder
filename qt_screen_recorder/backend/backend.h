@@ -13,7 +13,7 @@
 class BackEnd : public QObject
 {
     Q_OBJECT
-    Q_PROPERTY(QString outputPath READ getOutputPath WRITE setOutputPath NOTIFY outputPathChanged)
+    Q_PROPERTY(QString outputDir READ getOutputDir WRITE setOutputDir NOTIFY outputDirChanged)
     Q_PROPERTY(QList<QString> videoDevices READ getVideoDevices CONSTANT)
     Q_PROPERTY(QList<QString> audioDevices READ getAudioDevices CONSTANT)
     Q_PROPERTY(int selectedVideoDeviceIndex READ getSelectedVideoDeviceIndex WRITE setSelectedVideoDeviceIndex NOTIFY selectedVideoDeviceIndexChanged)
@@ -26,7 +26,7 @@ class BackEnd : public QObject
 
     QML_ELEMENT
 
-    QString m_outputPath;
+    QString m_outputDir;
 
     std::vector<InputDeviceVideo> availableVideoDevices;
     std::vector<InputDeviceAudio> availableAudioDevices;
@@ -42,19 +42,23 @@ class BackEnd : public QObject
     int m_selectedFramerateIndex;
 
     RecordingConfig config;
+    std::unique_ptr<RecordingService> rs;
 
     void updateAvailableOutputResolutions();
 public:
     explicit BackEnd(QObject *parent = nullptr);
+
+    Q_INVOKABLE void startRecording();
+    Q_INVOKABLE void stopRecording();
 
     // ------
     // Config
     // ------
 
     // Output path
-    QString getOutputPath();
+    QString getOutputDir();
 
-    void setOutputPath(QString path);
+    void setOutputDir(QString path);
 
     // A/V input devices
     QList<QString> getVideoDevices();
@@ -88,7 +92,7 @@ public:
     void setSelectedFramerateIndex(int index);
 
 signals:
-    void outputPathChanged();
+    void outputDirChanged();
     void selectedVideoDeviceIndexChanged();
     void selectedAudioDeviceIndexChanged();
     void selectedOutputResolutionIndexChanged();

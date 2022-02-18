@@ -40,18 +40,18 @@ Window {
                 anchors.topMargin: 4
 
                 Label {
-                    id: outputPathLabel
-                    text: "Output Path"
+                    id: outputDirLabel
+                    text: "Output Directory"
                     anchors.verticalCenter: parent.verticalCenter
                     Material.foreground: "white"
                 }
 
                 Label {
-                    id: outputPathValue
+                    id: outputDirValue
                     width: 300
-                    text: backend.outputPath
+                    text: backend.outputDir
                     anchors.verticalCenter: parent.verticalCenter
-                    anchors.right: outputPathButton.left
+                    anchors.right: outputDirButton.left
                     horizontalAlignment: Text.AlignRight
                     wrapMode: Text.NoWrap
                     anchors.rightMargin: 16
@@ -60,14 +60,14 @@ Window {
                 }
 
                 Button {
-                    id: outputPathButton
+                    id: outputDirButton
                     width: 116
                     text: "Browse"
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.right: parent.right
 
                     Connections {
-                        target: outputPathButton
+                        target: outputDirButton
                         onClicked: {
                             folderDialog.visible = true
                         }
@@ -76,9 +76,9 @@ Window {
 
                 FolderDialog {
                     id: folderDialog
-                    folder: backend.outputPath
+                    folder: backend.outputDir
                     onFolderChanged: {
-                        backend.outputPath = folder
+                        backend.outputDir = folder
                     }
                 }
             }

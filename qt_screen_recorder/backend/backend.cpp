@@ -19,10 +19,11 @@ BackEnd::BackEnd(QObject *parent) :
     availableOutputResolutions = RecordingConfig::getOutputResolutionsChoices(width, height);
 
     config = {};
+    config.setUseControlThread(false);
 
     // Init output path
     QStringList locations = QStandardPaths::standardLocations(QStandardPaths::DesktopLocation);
-    setOutputPath(locations[0]);
+    setOutputDir(locations[0]);
 
     // Init devices
     setSelectedVideoDeviceIndex(0);
@@ -36,16 +37,28 @@ BackEnd::BackEnd(QObject *parent) :
     setSelectedOutputResolutionIndex(0);
 }
 
-QString BackEnd::getOutputPath() {
-    return m_outputPath;
+void BackEnd::startRecording() {
+    std::cout<<"asd"<<std::endl;
+    std::cout<<config.getVideoAddress()<<std::endl;
+    std::cout<<config.getAudioAddress()<<std::endl;
+    rs = std::make_unique<RecordingService>(config);
+    rs->start_recording();
 }
 
-void BackEnd::setOutputPath(QString path) {
-    if (path == m_outputPath) return;
+void BackEnd::stopRecording() {
+    rs->stop_recording();
+}
 
-    config.setOutputFilename(path.toStdString());
-    m_outputPath = path;
-    emit outputPathChanged();
+QString BackEnd::getOutputDir() {
+    return m_outputDir;
+}
+
+void BackEnd::setOutputDir(QString dir) {
+    if (dir == m_outputDir) return;
+
+    config.setOutputDir(dir.toStdString());
+    m_outputDir = dir;
+    emit outputDirChanged();
 }
 
 QList<QString> BackEnd::getVideoDevices()
