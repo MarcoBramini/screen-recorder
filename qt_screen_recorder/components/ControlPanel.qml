@@ -101,7 +101,15 @@ Rectangle {
 
             Connections {
                 target: pauseButton
-                onClicked: controlPanel.state = "paused"
+                onClicked: {
+                    if (controlPanel.state === "recording") {
+                        controlPanel.state = "paused"
+                        backend.pauseRecording()
+                        return
+                    }
+                    controlPanel.state = "recording"
+                    backend.resumeRecording()
+                }
             }
         }
 
@@ -129,7 +137,7 @@ Rectangle {
                 target: stopButton
                 onClicked: {
                     controlPanel.state = ""
-                    backend.startRecording()
+                    backend.stopRecording()
                 }
             }
         }

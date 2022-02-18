@@ -38,15 +38,20 @@ BackEnd::BackEnd(QObject *parent) :
 }
 
 void BackEnd::startRecording() {
-    std::cout<<"asd"<<std::endl;
-    std::cout<<config.getVideoAddress()<<std::endl;
-    std::cout<<config.getAudioAddress()<<std::endl;
-    rs = std::make_unique<RecordingService>(config);
+    rs = std::move(std::make_unique<RecordingService>(config));
     rs->start_recording();
 }
 
 void BackEnd::stopRecording() {
     rs->stop_recording();
+}
+
+void BackEnd::pauseRecording() {
+    rs->pause_recording();
+}
+
+void BackEnd::resumeRecording() {
+    rs->resume_recording();
 }
 
 QString BackEnd::getOutputDir() {

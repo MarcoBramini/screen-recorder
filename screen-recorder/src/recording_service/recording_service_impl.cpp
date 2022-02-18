@@ -132,7 +132,9 @@ int RecordingServiceImpl::resume_recording() {
         .count();
 
     mainDeviceCapturer->add_pause_duration(resumeTimestamp - pauseTimestamp);
-    auxDeviceCapturer->add_pause_duration(resumeTimestamp - pauseTimestamp);
+    if (mainDevice != auxDevice) {
+        auxDeviceCapturer->add_pause_duration(resumeTimestamp - pauseTimestamp);
+    }
 
     // Set cond var isPaused to false
     recordingStatus = RECORDING;

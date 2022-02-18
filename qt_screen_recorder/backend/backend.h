@@ -50,7 +50,8 @@ public:
 
     Q_INVOKABLE void startRecording();
     Q_INVOKABLE void stopRecording();
-
+    Q_INVOKABLE void pauseRecording();
+    Q_INVOKABLE void resumeRecording();
     // ------
     // Config
     // ------
