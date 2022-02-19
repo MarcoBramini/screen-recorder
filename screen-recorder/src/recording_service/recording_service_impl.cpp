@@ -8,7 +8,6 @@
 #include <chrono>
 
 #include "device_context.h"
-#include "error.h"
 #include "process_chain/decoder_ring.h"
 #include "process_chain/encoder_ring.h"
 #include "process_chain/muxer_ring.h"
@@ -21,46 +20,46 @@ using namespace std::chrono;
 
 /// Handles a captured video packed, enqueueing it in the video transcoder packets queue.
 /// It is used as callback for the PacketCapturer objects.
-void on_video_packet_capture(AVPacket *videoPacket,
+void on_video_packet_capture(std::unique_ptr<AVPacket, FFMpegObjectsDeleter> videoPacket,
                              int64_t relativePts,
-                             ProcessChain *videoTranscodeChain) {
-    videoTranscodeChain->enqueueSourcePacket(videoPacket, relativePts);
+                             ProcessChain &videoTranscodeChain) {
+    videoTranscodeChain.enqueueSourcePacket(std::move(videoPacket), relativePts);
 }
 
 /// Handles a captured audio packed, enqueueing it in the audio transcoder packets queue.
 /// It is used as callback for the PacketCapturer objects.
-void on_audio_packet_capture(AVPacket *audioPacket,
+void on_audio_packet_capture(std::unique_ptr<AVPacket, FFMpegObjectsDeleter> audioPacket,
                              int64_t relativePts,
-                             ProcessChain *audioTranscodeChain) {
-    audioTranscodeChain->enqueueSourcePacket(audioPacket, relativePts);
+                             ProcessChain &audioTranscodeChain) {
+    audioTranscodeChain.enqueueSourcePacket(std::move(audioPacket), relativePts);
 }
 
 /// Starts the packet capture loop.
 /// It temporarily stops if the recording process is paused.
 /// The loop exits when the recording proces is stopped.
-void RecordingServiceImpl::start_capture_loop(PacketCapturer *capturer) {
+void RecordingServiceImpl::start_capture_loop(PacketCapturer &capturer) {
     while (recordingStatus == RECORDING || recordingStatus == PAUSE) {
         // TODO: use pause cond var
         if (recordingStatus == PAUSE)
             continue;
 
-        capturer->capture_next();
+        capturer.capture_next();
     }
 }
 
 /// Processes all the captured packets in the a/v transcoder packets queue.
 /// It temporarily stops if the queue is empty but the recording process is still active (e.g. paused).
 /// The loop exits when the queue is empty and the recording process is stopped.
-void RecordingServiceImpl::start_transcode_process(ProcessChain *transcodeChain) {
+void RecordingServiceImpl::start_transcode_process(ProcessChain &transcodeChain) {
     while (true) {
         // TODO: use cond var to handle empty queue
-        if (transcodeChain->isSourceQueueEmpty()) {
+        if (transcodeChain.isSourceQueueEmpty()) {
             if (recordingStatus == RECORDING || recordingStatus == PAUSE)
                 continue;
             break;
         }
 
-        transcodeChain->processNext();
+        transcodeChain.processNext();
     }
 }
 
@@ -83,12 +82,12 @@ int RecordingServiceImpl::start_recording() {
 
     mainDeviceCaptureThread =
             std::thread([this]() {
-                start_capture_loop(mainDeviceCapturer);
+                start_capture_loop(*mainDeviceCapturer);
             });
 
     capturedVideoPacketsProcessThread =
             std::thread([this]() {
-                start_transcode_process(videoTranscodeChain);
+                start_transcode_process(*videoTranscodeChain);
             });
 
     // ---------------
@@ -99,13 +98,13 @@ int RecordingServiceImpl::start_recording() {
         if (mainDevice != auxDevice) {
             auxDeviceCaptureThread =
                     std::thread([this]() {
-                        start_capture_loop(auxDeviceCapturer);
+                        start_capture_loop(*auxDeviceCapturer);
                     });
         }
 
         capturedAudioPacketsProcessThread =
                 std::thread([this]() {
-                    start_transcode_process(audioTranscodeChain);
+                    start_transcode_process(*audioTranscodeChain);
                 });
     }
 
@@ -133,7 +132,7 @@ int RecordingServiceImpl::resume_recording() {
                     .count();
 
     mainDeviceCapturer->add_pause_duration(resumeTimestamp - pauseTimestamp);
-    if (mainDevice != auxDevice) {
+    if (mainDevice != auxDevice && !isAudioDisabled) {
         auxDeviceCapturer->add_pause_duration(resumeTimestamp - pauseTimestamp);
     }
 
@@ -223,10 +222,10 @@ RecordingServiceImpl::RecordingServiceImpl(const RecordingConfig &config) {
     outputMuxer = DeviceContext::init_muxer(config.getOutputPath(), isAudioDisabled);
 
     // Init common rings
-    auto *muxerRing = new MuxerChainRing(outputMuxer);
+    auto muxerRing = std::make_shared<MuxerChainRing>(outputMuxer);
 
     // Init video rings
-    auto *videoDecoderRing = new DecoderChainRing(mainDevice->getVideoStream());
+    auto videoDecoderRing = std::make_shared<DecoderChainRing>(mainDevice->getVideoStream());
 
     auto[encoderOutputWidth, encoderOutputHeight, scalerOutputWidth, scalerOutputHeight, cropOriginX, cropOriginY] =
     get_output_image_parameters(videoDecoderRing->getDecoderContext()->width,
@@ -251,11 +250,10 @@ RecordingServiceImpl::RecordingServiceImpl(const RecordingConfig &config) {
                                              mainDevice->getVideoStream(), nullptr)
                     .num
     };
-    auto *videoEncoderRing =
-            new EncoderChainRing(mainDevice->getVideoStream(),
-                                 outputMuxer->getVideoStream(), videoEncoderConfig);
+    auto videoEncoderRing = std::make_shared<EncoderChainRing>(mainDevice->getVideoStream(),
+                                                               outputMuxer->getVideoStream(), videoEncoderConfig);
 
-    std::vector<FilterChainRing *> videoFilterRings;
+    std::vector<std::shared_ptr<FilterChainRing>> videoFilterRings;
 
     SWScaleConfig swScaleConfig = {
             .inputWidth = videoDecoderRing->getDecoderContext()->width,
@@ -265,7 +263,7 @@ RecordingServiceImpl::RecordingServiceImpl(const RecordingConfig &config) {
             .outputHeight = scalerOutputHeight,
             .outputPixelFormat = videoEncoderRing->getEncoderContext()->pix_fmt,
     };
-    auto *swScaleFilterRing = new SWScaleFilterRing(swScaleConfig);
+    auto swScaleFilterRing = std::make_shared<SWScaleFilterRing>(swScaleConfig);
     videoFilterRings.push_back(swScaleFilterRing);
 
     if (config.getCaptureRegion()) {
@@ -281,17 +279,17 @@ RecordingServiceImpl::RecordingServiceImpl(const RecordingConfig &config) {
                 .outputHeight = encoderOutputHeight,
                 .outputPixelFormat = videoEncoderRing->getEncoderContext()->pix_fmt,
         };
-        auto *vfCropFilterRing = new VFCropFilterRing(vfCropConfig);
+        auto vfCropFilterRing = std::make_shared<VFCropFilterRing>(vfCropConfig);
         videoFilterRings.push_back(vfCropFilterRing);
     }
 
     // Init video transcode process chain
-    this->videoTranscodeChain = new ProcessChain(
+    this->videoTranscodeChain = std::make_unique<ProcessChain>(
             videoDecoderRing, videoFilterRings, videoEncoderRing, muxerRing, true);
 
     if (!isAudioDisabled) {
         // Init audio rings
-        auto *audioDecoderRing = new DecoderChainRing(auxDevice->getAudioStream());
+        auto audioDecoderRing = std::make_shared<DecoderChainRing>(auxDevice->getAudioStream());
 
         int channels = auxDevice->getAudioStream()->codecpar->channels;
         EncoderConfig audioEncoderConfig = {
@@ -304,9 +302,8 @@ RecordingServiceImpl::RecordingServiceImpl(const RecordingConfig &config) {
                 .sampleFormat = OUTPUT_AUDIO_SAMPLE_FMT,
                 .strictStdCompliance = FF_COMPLIANCE_NORMAL
         };
-        auto *audioEncoderRing =
-                new EncoderChainRing(auxDevice->getAudioStream(),
-                                     outputMuxer->getAudioStream(), audioEncoderConfig);
+        auto audioEncoderRing = std::make_shared<EncoderChainRing>(auxDevice->getAudioStream(),
+                                                                   outputMuxer->getAudioStream(), audioEncoderConfig);
 
         SWResampleConfig swResampleConfig = {
                 .inputChannels = audioDecoderRing->getDecoderContext()->channels,
@@ -322,30 +319,32 @@ RecordingServiceImpl::RecordingServiceImpl(const RecordingConfig &config) {
                 .outputFrameSize = audioEncoderRing->getEncoderContext()->frame_size,
                 .outputTimeBase = audioEncoderRing->getEncoderContext()->time_base,
         };
-        auto *swResampleFilterRing = new SWResampleFilterRing(swResampleConfig);
-        std::vector<FilterChainRing *> audioFilterRings = {swResampleFilterRing};
+        auto swResampleFilterRing = std::make_shared<SWResampleFilterRing>(swResampleConfig);
+        std::vector<std::shared_ptr<FilterChainRing>> audioFilterRings = {swResampleFilterRing};
 
         // Init audio transcode process chain
-        this->audioTranscodeChain = new ProcessChain(
+        this->audioTranscodeChain = std::make_unique<ProcessChain>(
                 audioDecoderRing, audioFilterRings, audioEncoderRing, muxerRing, false);
     }
 
     // Init packet capturers
-    auto onVideoPacketCaptureCallback = [this](AVPacket *videoPacket, int64_t relativePts) {
-        return on_video_packet_capture(videoPacket, relativePts, videoTranscodeChain);
+    auto onVideoPacketCaptureCallback = [this](std::unique_ptr<AVPacket, FFMpegObjectsDeleter> videoPacket,
+                                               int64_t relativePts) {
+        return on_video_packet_capture(std::move(videoPacket), relativePts, *videoTranscodeChain);
     };
 
-    auto onAudioPacketCaptureCallback = [this](AVPacket *audioPacket, int64_t relativePts) {
-        return on_audio_packet_capture(audioPacket, relativePts, audioTranscodeChain);
+    auto onAudioPacketCaptureCallback = [this](std::unique_ptr<AVPacket, FFMpegObjectsDeleter> audioPacket,
+                                               int64_t relativePts) {
+        return on_audio_packet_capture(std::move(audioPacket), relativePts, *audioTranscodeChain);
     };
 
-    mainDeviceCapturer = new PacketCapturer(
+    mainDeviceCapturer = std::make_unique<PacketCapturer>(
             mainDevice,
             onVideoPacketCaptureCallback,
             onAudioPacketCaptureCallback);
 
     if (mainDevice != auxDevice && !isAudioDisabled) {
-        auxDeviceCapturer = new PacketCapturer(
+        auxDeviceCapturer = std::make_unique<PacketCapturer>(
                 auxDevice,
                 onVideoPacketCaptureCallback,
                 onAudioPacketCaptureCallback);

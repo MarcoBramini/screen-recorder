@@ -10,14 +10,16 @@ extern "C" {
 }
 
 class FilterChainRing {
-    std::variant<FilterChainRing *, EncoderChainRing *> next;
+    std::variant<std::shared_ptr<FilterChainRing>, std::shared_ptr<EncoderChainRing>> next;
 
 public:
     virtual void execute(ProcessContext *processContext, AVFrame *inputFrame) = 0;
 
-    std::variant<FilterChainRing *, EncoderChainRing *> getNext() { return this->next; };
+    std::variant<std::shared_ptr<FilterChainRing>, std::shared_ptr<EncoderChainRing>> getNext() { return this->next; };
 
-    void setNext(std::variant<FilterChainRing *, EncoderChainRing *> ring) { this->next = ring; };
+    void setNext(std::variant<std::shared_ptr<FilterChainRing>, std::shared_ptr<EncoderChainRing>> ring) {
+        this->next = std::move(ring);
+    };
 
     virtual ~FilterChainRing() = default;
 };

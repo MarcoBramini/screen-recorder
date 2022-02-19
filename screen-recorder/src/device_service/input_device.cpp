@@ -1,6 +1,3 @@
-//
-// Created by Marco Bramini on 16/02/22.
-//
 #include "input_device.h"
 #include <fmt/core.h>
 

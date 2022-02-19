@@ -8,19 +8,16 @@ VFCropFilterRing::VFCropFilterRing(VFCropConfig config) : config(config) {
             fmt::format("crop={}:{}:{}:{}", config.outputWidth, config.outputHeight,
                         config.originX, config.originY);
 
-    buffersink_ctx = nullptr;
-    buffersrc_ctx = nullptr;
-
     char args[512];
     int ret;
-    const AVFilter *buffersrc = avfilter_get_by_name("buffer");
-    const AVFilter *buffersink = avfilter_get_by_name("buffersink");
-    AVFilterInOut *outputs = avfilter_inout_alloc();
-    AVFilterInOut *inputs = avfilter_inout_alloc();
-    enum AVPixelFormat pix_fmts[] = {config.outputPixelFormat, AV_PIX_FMT_NONE};
 
-    filter_graph = avfilter_graph_alloc();
-    if (!outputs || !inputs || !filter_graph) {
+    const AVFilter *bufferSrc = avfilter_get_by_name("buffer");
+    const AVFilter *bufferSink = avfilter_get_by_name("buffersink");
+
+    auto outputs = avfilter_inout_alloc(); // WARN A smart pointer cannot be immediately used because of the avfilter_graph_parse_ptr function which requires a pointer of pointer
+    auto inputs = avfilter_inout_alloc(); // WARN A smart pointer cannot be immediately used because of the avfilter_graph_parse_ptr function which requires a pointer of pointer
+    filterGraph = std::unique_ptr<AVFilterGraph, FFMpegObjectsDeleter>(avfilter_graph_alloc());
+    if (!outputs || !inputs || !filterGraph) {
         throw std::runtime_error(Error::build_error_message(__FUNCTION__, {},
                                                             fmt::format("error initializing filter graph ({})",
                                                                         Error::unpackAVError(AVERROR(ENOMEM)))));
@@ -33,8 +30,9 @@ VFCropFilterRing::VFCropFilterRing(VFCropConfig config) : config(config) {
              config.inputTimeBase.num, config.inputTimeBase.den,
              config.inputAspectRatio.num, config.inputAspectRatio.den);
 
-    ret = avfilter_graph_create_filter(&buffersrc_ctx, buffersrc, "in", args,
-                                       nullptr, filter_graph);
+    AVFilterContext *bufferSrcCtxTemp = nullptr;
+    ret = avfilter_graph_create_filter(&bufferSrcCtxTemp, bufferSrc, "in", args,
+                                       nullptr, filterGraph.get());
     if (ret < 0) {
         throw std::runtime_error(Error::build_error_message(
                 __FUNCTION__, {},
@@ -42,17 +40,22 @@ VFCropFilterRing::VFCropFilterRing(VFCropConfig config) : config(config) {
                             Error::unpackAVError(ret))));
     }
 
+    bufferSrcCtx = std::unique_ptr<AVFilterContext, FFMpegObjectsDeleter>(bufferSrcCtxTemp);
+
     // Init the buffer video sink: filter chain termination, emits the converted frames.
-    ret = avfilter_graph_create_filter(&buffersink_ctx, buffersink, "out", nullptr,
-                                       nullptr, filter_graph);
+    AVFilterContext *bufferSinkCtxTemp = nullptr;
+    ret = avfilter_graph_create_filter(&bufferSinkCtxTemp, bufferSink, "out", nullptr,
+                                       nullptr, filterGraph.get());
     if (ret < 0) {
         throw std::runtime_error(Error::build_error_message(
                 __FUNCTION__, {},
                 fmt::format("error creating buffer sink ({})",
                             Error::unpackAVError(ret))));
     }
+    bufferSinkCtx = std::unique_ptr<AVFilterContext, FFMpegObjectsDeleter>(bufferSinkCtxTemp);
 
-    ret = av_opt_set_int_list(buffersink_ctx, "pix_fmts", pix_fmts,
+    enum AVPixelFormat pix_fmts[] = {config.outputPixelFormat, AV_PIX_FMT_NONE};
+    ret = av_opt_set_int_list(bufferSinkCtx.get(), "pix_fmts", pix_fmts,
                               AV_PIX_FMT_NONE, AV_OPT_SEARCH_CHILDREN);
     if (ret < 0) {
         throw std::runtime_error(Error::build_error_message(
@@ -62,7 +65,7 @@ VFCropFilterRing::VFCropFilterRing(VFCropConfig config) : config(config) {
     }
 
     /*
-     * Set the endpoints for the filter graph. The filter_graph will
+     * Set the endpoints for the filter graph. The filterGraph will
      * be linked to the graph described by filters_descr.
      */
 
@@ -73,7 +76,7 @@ VFCropFilterRing::VFCropFilterRing(VFCropConfig config) : config(config) {
      * default.
      */
     outputs->name = av_strdup("in");
-    outputs->filter_ctx = buffersrc_ctx;
+    outputs->filter_ctx = bufferSrcCtx.get();
     outputs->pad_idx = 0;
     outputs->next = nullptr;
 
@@ -84,31 +87,37 @@ VFCropFilterRing::VFCropFilterRing(VFCropConfig config) : config(config) {
      * default.
      */
     inputs->name = av_strdup("out");
-    inputs->filter_ctx = buffersink_ctx;
+    inputs->filter_ctx = bufferSinkCtx.get();
     inputs->pad_idx = 0;
     inputs->next = nullptr;
 
-    if ((ret = avfilter_graph_parse_ptr(filter_graph, filter_descr.c_str(),
+    if ((ret = avfilter_graph_parse_ptr(filterGraph.get(), filter_descr.c_str(),
                                         &inputs, &outputs, nullptr)) < 0)
         throw std::runtime_error(Error::build_error_message(
                 __FUNCTION__, {},
                 fmt::format("error parsing the filter graph description ({})",
                             Error::unpackAVError(ret))));
 
-    if ((ret = avfilter_graph_config(filter_graph, nullptr)) < 0)
+    inputs = std::unique_ptr<AVFilterInOut, FFMpegObjectsDeleter>(inputs).get();
+    outputs = std::unique_ptr<AVFilterInOut, FFMpegObjectsDeleter>(outputs).get();
+
+    if ((ret = avfilter_graph_config(filterGraph.get(), nullptr)) < 0)
         throw std::runtime_error(Error::build_error_message(
                 __FUNCTION__, {},
                 fmt::format("error configuring the filter graph ({})",
                             Error::unpackAVError(ret))));
 }
 
-void VFCropFilterRing::execute(ProcessContext *processContext,
-                               AVFrame *inputFrame) {
+void VFCropFilterRing::execute(ProcessContext *processContext, AVFrame *inputFrame) {
     int ret;
-    AVFrame *convertedFrame = av_frame_alloc();
+    auto convertedFrame = std::unique_ptr<AVFrame, FFMpegObjectsDeleter>(av_frame_alloc());
+    if (!convertedFrame) {
+        throw std::runtime_error(
+                Error::build_error_message(__FUNCTION__, {}, "error allocating a new frame"));
+    }
 
     // Send the input frame to the filtergraph
-    ret = av_buffersrc_add_frame_flags(buffersrc_ctx, inputFrame,
+    ret = av_buffersrc_add_frame_flags(bufferSrcCtx.get(), inputFrame,
                                        AV_BUFFERSRC_FLAG_KEEP_REF);
     if (ret < 0) {
         throw std::runtime_error(Error::build_error_message(__FUNCTION__, {},
@@ -119,7 +128,7 @@ void VFCropFilterRing::execute(ProcessContext *processContext,
 
     // Read the converted frames from the filtergraph
     while (true) {
-        ret = av_buffersink_get_frame(buffersink_ctx, convertedFrame);
+        ret = av_buffersink_get_frame(bufferSinkCtx.get(), convertedFrame.get());
         if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
             break;
         if (ret < 0)
@@ -130,13 +139,9 @@ void VFCropFilterRing::execute(ProcessContext *processContext,
     }
 
     // Pass the converted frame to the next ring
-    if (std::holds_alternative<FilterChainRing *>(getNext())) {
-        std::get<FilterChainRing *>(getNext())->execute(processContext,
-                                                        convertedFrame);
+    if (std::holds_alternative<std::shared_ptr<FilterChainRing>>(getNext())) {
+        std::get<std::shared_ptr<FilterChainRing>>(getNext())->execute(processContext, convertedFrame.get());
     } else {
-        std::get<EncoderChainRing *>(getNext())->execute(processContext,
-                                                         convertedFrame);
+        std::get<std::shared_ptr<EncoderChainRing>>(getNext())->execute(processContext, convertedFrame.get());
     }
-
-    av_frame_free(&convertedFrame);
 }

@@ -4,6 +4,7 @@
 #include "encoder_ring.h"
 #include "filter_ring.h"
 #include "process_context.h"
+#include "../ffmpeg_objects_deleter.h"
 #include <variant>
 
 extern "C" {
@@ -12,24 +13,22 @@ extern "C" {
 }
 
 class DecoderChainRing {
-    const AVCodec *streamCodec;
-    AVCodecContext *decoderContext;
+    std::unique_ptr<AVCodecContext, FFMpegObjectsDeleter> decoderContext;
 
-    std::variant<FilterChainRing *, EncoderChainRing *> next;
+    std::variant<std::shared_ptr<FilterChainRing>, std::shared_ptr<EncoderChainRing>> next;
 
 public:
     explicit DecoderChainRing(AVStream *inputStream);
 
     void execute(ProcessContext *processContext);
 
-    void setNext(std::variant<FilterChainRing *, EncoderChainRing *> ring) { this->next = ring; };
-
-    AVCodecContext *getDecoderContext() { return this->decoderContext; };
-
-    ~DecoderChainRing() {
-        avcodec_close(decoderContext);
-        avcodec_free_context(&decoderContext);
+    void setNext(std::variant<std::shared_ptr<FilterChainRing>, std::shared_ptr<EncoderChainRing>> ring) {
+        this->next = std::move(ring);
     };
+
+    AVCodecContext *getDecoderContext() { return this->decoderContext.get(); };
+
+    ~DecoderChainRing() = default;
 };
 
 

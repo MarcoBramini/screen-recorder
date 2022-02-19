@@ -18,15 +18,15 @@ struct SWScaleConfig {
 };
 
 class SWScaleFilterRing : public FilterChainRing {
-    SwsContext *swsContext;
+    std::unique_ptr<SwsContext,FFMpegObjectsDeleter> swsContext;
     SWScaleConfig config;
 
 public:
     explicit SWScaleFilterRing(SWScaleConfig config);
 
-    ~SWScaleFilterRing() override { sws_freeContext(swsContext); }
+    ~SWScaleFilterRing() override = default;
 
-    void execute(ProcessContext* processContext, AVFrame *inputFrame) override;
+    void execute(ProcessContext *processContext, AVFrame *inputFrame) override;
 };
 
 

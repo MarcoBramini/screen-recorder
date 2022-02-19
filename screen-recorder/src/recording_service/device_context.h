@@ -4,36 +4,40 @@
 #include <vector>
 #include <string>
 #include <map>
+#include "ffmpeg_objects_deleter.h"
 
 extern "C" {
 #include "libavformat/avformat.h"
 #include "libavcodec/avcodec.h"
 }
 
-
 class DeviceContext {
-    AVFormatContext *avfc;
+    std::unique_ptr<AVFormatContext, FFMpegObjectsDeleter> avfc;
+
+    // These are just convenience pointers to the context main A/V streams. They follow the context lifecycle
     AVStream *videoStream;
     AVStream *audioStream;
 
-    static AVFormatContext *init_input_device(const std::string &deviceID, const std::string &videoURL,
-            const std::string &audioURL,
-            const std::map<std::string, std::string> &optionsMap);
+    static std::unique_ptr<AVFormatContext, FFMpegObjectsDeleter>
+    init_input_device(const std::string &deviceID, const std::string &videoURL,
+                      const std::string &audioURL,
+                      const std::map<std::string, std::string> &optionsMap);
 
     int find_main_stream(AVMediaType streamType);
 
-    static AVFormatContext *init_output_context(const std::string &outputFileName);
+    static std::unique_ptr<AVFormatContext, FFMpegObjectsDeleter>
+    init_output_context(const std::string &outputFileName);
 
 public:
-    static DeviceContext *
+    static std::shared_ptr<DeviceContext>
     init_demuxer(const std::string &deviceID, const std::string &videoURL, const std::string &audioURL,
                  const std::map<std::string, std::string> &optionsMap);
 
 
-    static DeviceContext *init_muxer(const std::string &outputFileName, bool isAudioDisabled);
+    static std::shared_ptr<DeviceContext> init_muxer(const std::string &outputFileName, bool isAudioDisabled);
 
     AVFormatContext *getContext() {
-        return this->avfc;
+        return this->avfc.get();
     };
 
     AVStream *getVideoStream() {
@@ -44,10 +48,7 @@ public:
         return this->audioStream;
     };
 
-    ~DeviceContext() {
-        avformat_close_input(&avfc);
-        avformat_free_context(avfc);
-    };
+    ~DeviceContext() = default;
 };
 
 

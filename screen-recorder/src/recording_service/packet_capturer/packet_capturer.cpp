@@ -1,13 +1,13 @@
 #include "packet_capturer.h"
+#include <fmt/core.h>
+#include "../error.h"
 
-#include <utility>
-
-PacketCapturer::PacketCapturer(DeviceContext *inputDevice,
+PacketCapturer::PacketCapturer(std::shared_ptr<DeviceContext> inputDevice,
                                CapturedPacketHandler onVideoPacketCapture,
                                CapturedPacketHandler onAudioPacketCapture)
-        : inputDevice(inputDevice),
+        : inputDevice(std::move(inputDevice)),
           onVideoPacketCapture(std::move(onVideoPacketCapture)),
-          onAudioPacketCapture(std::move(onAudioPacketCapture)) {}
+          onAudioPacketCapture(std::move(onAudioPacketCapture)), totalPauseDuration(0) {}
 
 // Calculates the normalized PTS of a packet.
 int64_t calculate_packet_pts(int64_t absolutePts,
@@ -24,7 +24,7 @@ void PacketCapturer::handle_captured_video_packet(AVPacket *inputVideoPacket) {
     int64_t packetPts = calculate_packet_pts(
             inputVideoPacket->pts, inputDevice->getVideoStream()->start_time,
             totalPauseDuration);
-    onVideoPacketCapture(videoPacket, packetPts);
+    //onVideoPacketCapture(videoPacket, packetPts);
 
 }
 
@@ -36,17 +36,17 @@ void PacketCapturer::handle_captured_audio_packet(AVPacket *inputAudioPacket) {
     int64_t packetPts = calculate_packet_pts(
             inputAudioPacket->pts, inputDevice->getAudioStream()->start_time,
             totalPauseDuration);
-    onAudioPacketCapture(audioPacket, packetPts);
+    //onAudioPacketCapture(audioPacket, packetPts);
 
 }
 
 // Captures a new packet from the input device
 void PacketCapturer::capture_next() {
-    AVPacket inputPacket;
-    int ret = 0;
+    auto inputPacket = std::unique_ptr<AVPacket, FFMpegObjectsDeleter>(av_packet_alloc());
 
+    int ret;
     do {
-        ret = av_read_frame(inputDevice->getContext(), &inputPacket);
+        ret = av_read_frame(inputDevice->getContext(), inputPacket.get());
     } while (ret == AVERROR(EAGAIN));
 
     if (ret < 0) {
@@ -57,22 +57,28 @@ void PacketCapturer::capture_next() {
     }
 
     AVMediaType packetType = inputDevice->getContext()
-            ->streams[inputPacket.stream_index]
+            ->streams[inputPacket->stream_index]
             ->codecpar->codec_type;
 
+    int64_t packetPts;
     switch (packetType) {
         case AVMEDIA_TYPE_VIDEO:
-            PacketCapturer::handle_captured_video_packet(&inputPacket);
+            //auto videoPacket = av_packet_clone(inputVideoPacket);
+            packetPts = calculate_packet_pts(inputPacket->pts, inputDevice->getVideoStream()->start_time,
+                                             totalPauseDuration);
+
+            onVideoPacketCapture(std::move(inputPacket), packetPts);
             break;
         case AVMEDIA_TYPE_AUDIO:
-            PacketCapturer::handle_captured_audio_packet(&inputPacket);
+            packetPts = calculate_packet_pts(inputPacket->pts, inputDevice->getAudioStream()->start_time,
+                                             totalPauseDuration);
+
+            onAudioPacketCapture(std::move(inputPacket), packetPts);
             break;
         default:
             throw std::runtime_error(Error::build_error_message(
                     __FUNCTION__, {}, fmt::format("unexpected packet type ({})", std::to_string(packetType))));
     }
-
-    av_packet_unref(&inputPacket);
 }
 
 // Adds the duration of a resumed pause in order to normalize the packets PTS.

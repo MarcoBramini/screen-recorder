@@ -65,29 +65,29 @@ class RecordingServiceImpl {
     bool isAudioDisabled;
 
     // Input context
-    DeviceContext *mainDevice;
-    DeviceContext *auxDevice;
+    std::shared_ptr<DeviceContext> mainDevice;
+    std::shared_ptr<DeviceContext> auxDevice;
 
     // ------
     // Output
     // ------
 
     // Output context
-    DeviceContext *outputMuxer;
+    std::shared_ptr<DeviceContext> outputMuxer;
 
     // ----------------
     // Packet Capturers
     // ----------------
 
-    PacketCapturer *mainDeviceCapturer;
-    PacketCapturer *auxDeviceCapturer;
+    std::unique_ptr<PacketCapturer> mainDeviceCapturer;
+    std::unique_ptr<PacketCapturer> auxDeviceCapturer;
 
     // ---------------
     // Transcode Chain
     // ---------------
 
-    ProcessChain *videoTranscodeChain;
-    ProcessChain *audioTranscodeChain;
+    std::unique_ptr<ProcessChain> videoTranscodeChain;
+    std::unique_ptr<ProcessChain> audioTranscodeChain;
 
     // recording_utils.cpp
     static std::map<std::string, std::string> get_device_options(
@@ -103,9 +103,9 @@ class RecordingServiceImpl {
         const RecordingConfig &config);
 
     // recording_service.cpp
-    void start_capture_loop(PacketCapturer *capturer);
+    void start_capture_loop(PacketCapturer &capturer);
 
-    void start_transcode_process(ProcessChain *transcodeChain);
+    void start_transcode_process(ProcessChain &transcodeChain);
 
 public:
     explicit RecordingServiceImpl(const RecordingConfig &config);
@@ -122,21 +122,7 @@ public:
 
     RecordingStats get_recording_stats();
 
-    ~RecordingServiceImpl() {
-        if (mainDevice != auxDevice && !isAudioDisabled) {
-            delete auxDevice;
-            delete auxDeviceCapturer;
-        }
-        delete mainDevice;
-        delete mainDeviceCapturer;
-
-        delete outputMuxer;
-
-        delete videoTranscodeChain;
-        if (!isAudioDisabled) {
-            delete audioTranscodeChain;
-        }
-    };
+    ~RecordingServiceImpl() = default;
 };
 
 #endif  // PDS_SCREEN_RECORDING_RECORDINGSERVICE_H

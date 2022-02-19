@@ -1,7 +1,3 @@
-//
-// Created by Marco Bramini on 16/09/21.
-//
-
 #include "../../../include/device_service.h"
 #include <vector>
 

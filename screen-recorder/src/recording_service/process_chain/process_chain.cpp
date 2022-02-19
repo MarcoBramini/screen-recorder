@@ -8,23 +8,20 @@ void ProcessChain::processNext() {
         return;
     }
 
-    // Get first packet
-    ProcessContext *inputPacket = sourceQueue.front();
+    auto inputPacket = std::move(sourceQueue.front());
     sourceQueue.pop();
 
-    decoderRing->execute(inputPacket);
-    delete inputPacket;
+    decoderRing->execute(inputPacket.get());
 }
 
-/// Initializes the process chain using the rings passed in input.
-ProcessChain::ProcessChain(DecoderChainRing *decoderRing,
-                           std::vector<FilterChainRing *> filterRings,
-                           EncoderChainRing *encoderRing,
-                           MuxerChainRing *muxerRing,
-                           bool isMainProcess) : decoderRing(decoderRing),
+/// Initializes the process chain using the rings passed in input
+ProcessChain::ProcessChain(std::shared_ptr<DecoderChainRing> decoderRing,
+                           std::vector<std::shared_ptr<FilterChainRing>> filterRings,
+                           std::shared_ptr<EncoderChainRing> encoderRing, std::shared_ptr<MuxerChainRing> muxerRing,
+                           bool isMainProcess) : decoderRing(std::move(decoderRing)),
                                                  filterRings(std::move(filterRings)),
-                                                 encoderRing(encoderRing),
-                                                 muxerRing(muxerRing),
+                                                 encoderRing(std::move(encoderRing)),
+                                                 muxerRing(std::move(muxerRing)),
                                                  isMainProcess(isMainProcess) {
     if (this->filterRings.empty()) {
         this->decoderRing->setNext(this->encoderRing);
@@ -41,9 +38,8 @@ ProcessChain::ProcessChain(DecoderChainRing *decoderRing,
 }
 
 /// Enqueues a packet for processing
-void ProcessChain::enqueueSourcePacket(AVPacket *p, int64_t pts) {
-    auto *processContext = new ProcessContext(p, pts);
-    sourceQueue.push(processContext);
+void ProcessChain::enqueueSourcePacket(std::unique_ptr<AVPacket, FFMpegObjectsDeleter> p, int64_t pts) {
+    sourceQueue.emplace(std::make_unique<ProcessContext>(std::move(p), pts));
 }
 
 /// Flushes the whole chain stream

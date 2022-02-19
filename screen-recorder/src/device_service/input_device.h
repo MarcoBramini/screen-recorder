@@ -1,7 +1,3 @@
-//
-// Created by Marco Bramini on 16/09/21.
-//
-
 #ifndef PDS_SCREEN_RECORDING_INPUT_DEVICE_H
 #define PDS_SCREEN_RECORDING_INPUT_DEVICE_H
 

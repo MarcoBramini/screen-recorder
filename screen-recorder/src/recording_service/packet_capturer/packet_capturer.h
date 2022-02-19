@@ -1,21 +1,19 @@
 #ifndef PDS_SCREEN_RECORDING_PACKET_CAPTURER_H
 #define PDS_SCREEN_RECORDING_PACKET_CAPTURER_H
 
-#include <fmt/core.h>
-#include <string>
 #include "../device_context.h"
-#include "../error.h"
+#include "../ffmpeg_objects_deleter.h"
 
 extern "C" {
 #include "libavcodec/avcodec.h"
 #include "libavformat/avformat.h"
 }
 
-typedef std::function<void(AVPacket *packet, int64_t relativePts)>
+typedef std::function<void(std::unique_ptr<AVPacket, FFMpegObjectsDeleter> packet, int64_t relativePts)>
         CapturedPacketHandler;
 
 class PacketCapturer {
-    DeviceContext *inputDevice;
+    std::shared_ptr<DeviceContext> inputDevice;
 
     int64_t totalPauseDuration = 0;
 
@@ -27,7 +25,7 @@ class PacketCapturer {
     void handle_captured_audio_packet(AVPacket *inputAudioPacket);
 
 public:
-    PacketCapturer(DeviceContext *inputDevice,
+    PacketCapturer(std::shared_ptr<DeviceContext> inputDevice,
                    CapturedPacketHandler onVideoPacketCapture,
                    CapturedPacketHandler onAudioPacketCapture);
 

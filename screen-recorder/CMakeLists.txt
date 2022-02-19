@@ -49,6 +49,8 @@ set(SOURCES
         src/recording_service/process_chain/vfcrop_filter_ring.h
         src/recording_service/packet_capturer/packet_capturer.cpp
         src/recording_service/packet_capturer/packet_capturer.h
+        src/recording_service/ffmpeg_objects_deleter.cpp
+        src/recording_service/ffmpeg_objects_deleter.h
         )
 if (${APPLE})
     set(SOURCES

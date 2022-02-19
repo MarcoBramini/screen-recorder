@@ -1,9 +1,7 @@
-//
-// Created by Marco Bramini on 03/11/21.
-//
-
 #ifndef PDS_SCREEN_RECORDING_PROCESS_CONTEXT_H
 #define PDS_SCREEN_RECORDING_PROCESS_CONTEXT_H
+
+#include "../ffmpeg_objects_deleter.h"
 
 extern "C" {
 #include <libavformat/avformat.h>
@@ -12,14 +10,13 @@ extern "C" {
 class ProcessContext {
 
 public:
-    AVPacket *sourcePacket;
+    std::unique_ptr<AVPacket, FFMpegObjectsDeleter> sourcePacket;
     int64_t sourcePacketPts;
 
-    ProcessContext(AVPacket *pkt, int64_t pts) : sourcePacket(pkt), sourcePacketPts(pts) {};
+    ProcessContext(std::unique_ptr<AVPacket, FFMpegObjectsDeleter> pkt, int64_t pts) : sourcePacket(std::move(pkt)),
+                                                                                       sourcePacketPts(pts) {};
 
-    ~ProcessContext() {
-        av_packet_free(&sourcePacket);
-    };
+    ~ProcessContext() = default;
 };
 
 

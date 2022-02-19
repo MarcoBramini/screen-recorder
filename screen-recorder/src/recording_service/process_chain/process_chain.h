@@ -1,7 +1,6 @@
 #ifndef PDS_SCREEN_RECORDING_PROCESS_CHAIN_H
 #define PDS_SCREEN_RECORDING_PROCESS_CHAIN_H
 
-
 #include <queue>
 #include <thread>
 #include <iostream>
@@ -17,43 +16,33 @@
 /// It takes an AVPacket queue in input.
 class ProcessChain {
 
-    std::queue<ProcessContext *> sourceQueue;
+    std::queue<std::unique_ptr<ProcessContext>> sourceQueue;
 
-    DecoderChainRing *decoderRing;
+    std::shared_ptr<DecoderChainRing> decoderRing;
 
-    std::vector<FilterChainRing *> filterRings;
+    std::vector<std::shared_ptr<FilterChainRing>> filterRings;
 
-    EncoderChainRing *encoderRing;
+    std::shared_ptr<EncoderChainRing> encoderRing;
 
-    MuxerChainRing *muxerRing;
+    std::shared_ptr<MuxerChainRing> muxerRing;
 
     bool isMainProcess; // video processing chain is considered the main process, audio is optional
 
 public:
-    ProcessChain(DecoderChainRing *decoderRing, std::vector<FilterChainRing *> filterRings,
-                 EncoderChainRing *encoderRing, MuxerChainRing *muxerRing, bool isMainProcess);
+    ProcessChain(std::shared_ptr<DecoderChainRing> decoderRing,
+                 std::vector<std::shared_ptr<FilterChainRing>> filterRings,
+                 std::shared_ptr<EncoderChainRing> encoderRing, std::shared_ptr<MuxerChainRing> muxerRing,
+                 bool isMainProcess);
 
     void processNext();
 
-    void enqueueSourcePacket(AVPacket *p, int64_t pts);
+    void enqueueSourcePacket(std::unique_ptr<AVPacket, FFMpegObjectsDeleter>, int64_t pts);
 
     bool isSourceQueueEmpty() { return this->sourceQueue.empty(); };
 
     void flush();
 
-    ~ProcessChain() {
-        delete decoderRing;
-
-        for (auto ring: filterRings) {
-            delete ring;
-        }
-
-        delete encoderRing;
-
-        if (isMainProcess) {
-            delete muxerRing;
-        }
-    };
+    ~ProcessChain() = default;
 };
 
 

@@ -9,11 +9,9 @@ extern "C" {
 
 /// Initializes the encoder
 EncoderChainRing::EncoderChainRing(AVStream *inputStream, AVStream *outputStream, const EncoderConfig &config)
-        : inputStream(inputStream), outputStream(outputStream), outputStreamCodec(nullptr), encoderContext(nullptr),
-          lastEncodedDTS(-1),
-          next(nullptr) {
+        : inputStream(inputStream), outputStream(outputStream), lastEncodedDTS(-1) {
     // Find encoder for output stream
-    outputStreamCodec = avcodec_find_encoder(config.codecID);
+    auto outputStreamCodec = avcodec_find_encoder(config.codecID);
     if (!outputStreamCodec) {
         throw std::runtime_error(
                 Error::build_error_message(__FUNCTION__, {},
@@ -21,7 +19,7 @@ EncoderChainRing::EncoderChainRing(AVStream *inputStream, AVStream *outputStream
     }
 
     // Allocate context for the encoder
-    encoderContext = avcodec_alloc_context3(outputStreamCodec);
+    encoderContext = std::unique_ptr<AVCodecContext, FFMpegObjectsDeleter>(avcodec_alloc_context3(outputStreamCodec));
     if (!encoderContext) {
         throw std::runtime_error(
                 Error::build_error_message(__FUNCTION__, {}, "error allocating context for the encoder"));
@@ -70,7 +68,7 @@ EncoderChainRing::EncoderChainRing(AVStream *inputStream, AVStream *outputStream
         encoderContext->thread_count = 1; //don't use multithreading
 
     // Open encoder
-    ret = avcodec_open2(encoderContext, outputStreamCodec, nullptr);
+    ret = avcodec_open2(encoderContext.get(), outputStreamCodec, nullptr);
     if (ret < 0) {
         throw std::runtime_error(
                 Error::build_error_message(__FUNCTION__, {},
@@ -78,7 +76,7 @@ EncoderChainRing::EncoderChainRing(AVStream *inputStream, AVStream *outputStream
     }
 
     // Copy encoder parameter to stream
-    ret = avcodec_parameters_from_context(outputStream->codecpar, encoderContext);
+    ret = avcodec_parameters_from_context(outputStream->codecpar, encoderContext.get());
     if (ret < 0) {
         throw std::runtime_error(Error::build_error_message(__FUNCTION__, {},
                                                             fmt::format(
@@ -104,12 +102,12 @@ void EncoderChainRing::execute(ProcessContext *processContext, AVFrame *inputFra
                                        encoderContext->time_base);
     }
 
-    AVPacket *encodedPacket = av_packet_alloc();
+    auto encodedPacket = std::unique_ptr<AVPacket, FFMpegObjectsDeleter>(av_packet_alloc());
     if (!encodedPacket) {
         throw std::runtime_error(Error::build_error_message(__FUNCTION__, {}, "error allocating packet"));
     }
 
-    int response = avcodec_send_frame(encoderContext, inputFrame);
+    int response = avcodec_send_frame(encoderContext.get(), inputFrame);
     if (response < 0) {
         throw std::runtime_error(
                 Error::build_error_message(__FUNCTION__, {},
@@ -118,7 +116,7 @@ void EncoderChainRing::execute(ProcessContext *processContext, AVFrame *inputFra
     }
 
     while (response >= 0) {
-        response = avcodec_receive_packet(encoderContext, encodedPacket);
+        response = avcodec_receive_packet(encoderContext.get(), encodedPacket.get());
         if (response == AVERROR(EAGAIN) || response == AVERROR_EOF) {
             break;
         } else if (response < 0) {
@@ -130,7 +128,7 @@ void EncoderChainRing::execute(ProcessContext *processContext, AVFrame *inputFra
 
         encodedPacket->stream_index = outputStream->index;
 
-        av_packet_rescale_ts(encodedPacket, encoderContext->time_base, outputStream->time_base);
+        av_packet_rescale_ts(encodedPacket.get(), encoderContext->time_base, outputStream->time_base);
 
         if (encodedPacket->dts <= lastEncodedDTS) {
             continue;
@@ -138,8 +136,6 @@ void EncoderChainRing::execute(ProcessContext *processContext, AVFrame *inputFra
         lastEncodedDTS = encodedPacket->dts;
 
         // Pass the encoded packet to the next ring
-        next->execute(processContext, encodedPacket);
+        next->execute(processContext, encodedPacket.get());
     }
-    av_packet_unref(encodedPacket);
-    av_packet_free(&encodedPacket);
 }

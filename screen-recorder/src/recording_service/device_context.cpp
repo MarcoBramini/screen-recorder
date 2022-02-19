@@ -4,10 +4,10 @@
 
 /// Initializes the demuxer device identifier by the passed deviceID and A/V urls.
 /// Device options can be set by populating the options map.
-DeviceContext *DeviceContext::init_demuxer(const std::string &deviceID, const std::string &videoURL,
-                                           const std::string &audioURL,
-                                           const std::map<std::string, std::string> &optionsMap) {
-    auto *deviceContext = new DeviceContext();
+std::shared_ptr<DeviceContext> DeviceContext::init_demuxer(const std::string &deviceID, const std::string &videoURL,
+                                                           const std::string &audioURL,
+                                                           const std::map<std::string, std::string> &optionsMap) {
+    auto deviceContext = std::make_shared<DeviceContext>();
     deviceContext->avfc = init_input_device(deviceID, videoURL, audioURL, optionsMap);
 
     if (!videoURL.empty()) {
@@ -24,17 +24,17 @@ DeviceContext *DeviceContext::init_demuxer(const std::string &deviceID, const st
 
 /// Initializes the muxer device identifier.
 /// The output path must be a full path and have .mp4 extension.
-DeviceContext *DeviceContext::init_muxer(const std::string &outputPath, bool isAudioDisabled) {
+std::shared_ptr<DeviceContext> DeviceContext::init_muxer(const std::string &outputPath, bool isAudioDisabled) {
     // Build method params for error handling purposes
     std::map<std::string, std::string> methodParams = {{"outputPath",      outputPath},
                                                        {"isAudioDisabled", std::to_string(isAudioDisabled)}};
 
-    auto *deviceContext = new DeviceContext();
+    auto deviceContext = std::make_shared<DeviceContext>();
 
     deviceContext->avfc = init_output_context(outputPath);
 
     // Add new output video stream
-    deviceContext->videoStream = avformat_new_stream(deviceContext->avfc, nullptr);
+    deviceContext->videoStream = avformat_new_stream(deviceContext->avfc.get(), nullptr);
     if (!deviceContext->videoStream) {
         throw std::runtime_error(
                 Error::build_error_message(__FUNCTION__, methodParams, "error allocating output AVStream"));
@@ -43,7 +43,7 @@ DeviceContext *DeviceContext::init_muxer(const std::string &outputPath, bool isA
 
     if (!isAudioDisabled) {
         // Add new output audio stream
-        deviceContext->audioStream = avformat_new_stream(deviceContext->avfc, nullptr);
+        deviceContext->audioStream = avformat_new_stream(deviceContext->avfc.get(), nullptr);
         if (!deviceContext->audioStream) {
             throw std::runtime_error(
                     Error::build_error_message(__FUNCTION__, methodParams, "error allocating output AVStream"));
@@ -55,10 +55,10 @@ DeviceContext *DeviceContext::init_muxer(const std::string &outputPath, bool isA
 
 
 /// Initializes the device identified by the passed deviceID and A/V urls.
-AVFormatContext *DeviceContext::init_input_device(const std::string &deviceID, const std::string &videoURL,
-                                                  const std::string &audioURL,
-                                                  const std::map<std::string, std::string> &optionsMap) {
-    int ret;
+std::unique_ptr<AVFormatContext, FFMpegObjectsDeleter>
+DeviceContext::init_input_device(const std::string &deviceID, const std::string &videoURL,
+                                 const std::string &audioURL,
+                                 const std::map<std::string, std::string> &optionsMap) {
     // Build method params for error handling purposes
     std::map<std::string, std::string> methodParams = {{"deviceID", deviceID},
                                                        {"videoURL", videoURL},
@@ -66,7 +66,7 @@ AVFormatContext *DeviceContext::init_input_device(const std::string &deviceID, c
     };
 
     // Allocate a context for the device
-    AVFormatContext *ctx = avformat_alloc_context();
+    auto ctx = avformat_alloc_context(); // WARN A smart pointer cannot be immediately used because of the avformat_open_input function which requires a pointer of pointer
     if (!ctx) {
         throw std::runtime_error(Error::build_error_message(__FUNCTION__, methodParams,
                                                             "error during AVFormatContext allocation"));
@@ -81,6 +81,7 @@ AVFormatContext *DeviceContext::init_input_device(const std::string &deviceID, c
 
     // Build the options for the device
     AVDictionary *options = nullptr;
+    int ret;
     for (const auto &option: optionsMap) {
         ret = av_dict_set(&options, option.first.c_str(), option.second.c_str(), 0);
         if (ret < 0) {
@@ -117,7 +118,7 @@ AVFormatContext *DeviceContext::init_input_device(const std::string &deviceID, c
                                                                         Error::unpackAVError(ret))));
     }
 
-    return ctx;
+    return std::unique_ptr<AVFormatContext, FFMpegObjectsDeleter>(ctx);
 }
 
 /// Finds the main video stream in the current device context.
@@ -129,7 +130,7 @@ int DeviceContext::find_main_stream(AVMediaType streamType) {
         throw std::runtime_error(Error::build_error_message(__FUNCTION__, methodParams, "device not initialized"));
     }
 
-    int streamIndex = av_find_best_stream(avfc, streamType, -1, -1, nullptr, 0);
+    int streamIndex = av_find_best_stream(avfc.get(), streamType, -1, -1, nullptr, 0);
     if (streamIndex < 0) {
         throw std::runtime_error(Error::build_error_message(__FUNCTION__, methodParams,
                                                             fmt::format("error finding main stream for type {}",
@@ -141,7 +142,8 @@ int DeviceContext::find_main_stream(AVMediaType streamType) {
 
 
 /// Allocates the output context and open the output file.
-AVFormatContext *DeviceContext::init_output_context(const std::string &outputPath) {
+std::unique_ptr<AVFormatContext, FFMpegObjectsDeleter>
+DeviceContext::init_output_context(const std::string &outputPath) {
     // Build method params for error handling purposes
     std::map<std::string, std::string> methodParams = {{"outputPath", outputPath}};
 
@@ -165,6 +167,6 @@ AVFormatContext *DeviceContext::init_output_context(const std::string &outputPat
         }
     }
 
-    return ctx;
+    return std::unique_ptr<AVFormatContext, FFMpegObjectsDeleter>(ctx);
 }
 

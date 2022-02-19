@@ -9,12 +9,12 @@ extern "C" {
 }
 
 class MuxerChainRing {
-    DeviceContext* muxerContext;
+    std::shared_ptr<DeviceContext> muxerContext;
 
 public:
-    explicit MuxerChainRing(DeviceContext* muxerContext);
+    explicit MuxerChainRing(std::shared_ptr<DeviceContext> muxerContext);
 
-    void execute(ProcessContext* processContext, AVPacket* inputPacket);
+    void execute(ProcessContext *processContext, AVPacket *inputPacket);
 
     ~MuxerChainRing() = default;
 };

@@ -1,9 +1,8 @@
-
 #ifndef PDS_SCREEN_RECORDING_SWRESAMPLE_FILTER_RING_H
 #define PDS_SCREEN_RECORDING_SWRESAMPLE_FILTER_RING_H
 
-
 #include "filter_ring.h"
+#include "../ffmpeg_objects_deleter.h"
 
 extern "C" {
 #include <libavformat/avformat.h>
@@ -27,16 +26,13 @@ struct SWResampleConfig {
 };
 
 class SWResampleFilterRing : public FilterChainRing {
-    SwrContext *swrContext;
+    std::unique_ptr<SwrContext,FFMpegObjectsDeleter> swrContext;
     SWResampleConfig config;
-    AVAudioFifo *outputBuffer;
+    std::unique_ptr<AVAudioFifo,FFMpegObjectsDeleter> outputBuffer;
 public:
     explicit SWResampleFilterRing(SWResampleConfig config);
 
-    ~SWResampleFilterRing() override {
-        swr_free(&swrContext);
-        av_audio_fifo_free(outputBuffer);
-    }
+    ~SWResampleFilterRing() override = default;
 
     void execute(ProcessContext *processContext, AVFrame *inputFrame) override;
 };

@@ -29,18 +29,14 @@ struct VFCropConfig {
 class VFCropFilterRing : public FilterChainRing {
     VFCropConfig config;
 
-    AVFilterContext *buffersink_ctx;
-    AVFilterContext *buffersrc_ctx;
-    AVFilterGraph *filter_graph;
+     std::unique_ptr<AVFilterContext,FFMpegObjectsDeleter> bufferSinkCtx;
+     std::unique_ptr<AVFilterContext,FFMpegObjectsDeleter> bufferSrcCtx;
+    std::unique_ptr<AVFilterGraph,FFMpegObjectsDeleter> filterGraph;
 
 public:
     explicit VFCropFilterRing(VFCropConfig config);
 
-    ~VFCropFilterRing() override {
-        avfilter_graph_free(&filter_graph);
-        avfilter_free(buffersink_ctx);
-        avfilter_free(buffersrc_ctx);
-    }
+    ~VFCropFilterRing() override = default;
 
     void execute(ProcessContext *processContext, AVFrame *inputFrame) override;
 };

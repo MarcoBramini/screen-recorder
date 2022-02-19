@@ -2,6 +2,7 @@
 #define PDS_SCREEN_RECORDING_ENCODER_RING_H
 
 #include "muxer_ring.h"
+#include "../ffmpeg_objects_deleter.h"
 
 extern "C" {
 #include "libavcodec/avcodec.h"
@@ -9,53 +10,49 @@ extern "C" {
 }
 
 struct EncoderConfig {
-  AVCodecID codecID;
-  AVMediaType codecType;
-  std::map<std::string, std::string> encoderOptions;
-  int bitRate;
+    AVCodecID codecID;
+    AVMediaType codecType;
+    std::map<std::string, std::string> encoderOptions;
+    int bitRate;
 
-  // Video properties
-  int height;
-  int width;
-  AVPixelFormat pixelFormat;
-  int frameRate;
+    // Video properties
+    int height;
+    int width;
+    AVPixelFormat pixelFormat;
+    int frameRate;
 
-  // Audio properties
-  int channels;
-  int64_t channelLayout;
-  int sampleRate;
-  AVSampleFormat sampleFormat;
-  int strictStdCompliance;
+    // Audio properties
+    int channels;
+    int64_t channelLayout;
+    int sampleRate;
+    AVSampleFormat sampleFormat;
+    int strictStdCompliance;
 };
 
 class EncoderChainRing {
-  AVStream* inputStream;
-  AVStream* outputStream;
+    AVStream *inputStream;
+    AVStream *outputStream;
 
-  const AVCodec* outputStreamCodec{};
-  AVCodecContext* encoderContext;
+    std::unique_ptr<AVCodecContext, FFMpegObjectsDeleter> encoderContext;
 
-  int64_t lastEncodedDTS;
+    int64_t lastEncodedDTS;
 
-  MuxerChainRing* next;
+    std::shared_ptr<MuxerChainRing> next;
 
- public:
-  EncoderChainRing(AVStream* inputStream,
-                   AVStream* outputStream,
-                   const EncoderConfig& config);
+public:
+    EncoderChainRing(AVStream *inputStream,
+                     AVStream *outputStream,
+                     const EncoderConfig &config);
 
-  void execute(ProcessContext* processContext, AVFrame* inputFrame);
+    void execute(ProcessContext *processContext, AVFrame *inputFrame);
 
-  void setNext(MuxerChainRing* ring) { this->next = ring; };
+    void setNext(std::shared_ptr<MuxerChainRing> ring) { this->next = std::move(ring); };
 
-  AVCodecContext* getEncoderContext() { return this->encoderContext; };
+    AVCodecContext *getEncoderContext() { return this->encoderContext.get(); };
 
-  void flush();
+    void flush();
 
-  ~EncoderChainRing() {
-    avcodec_close(encoderContext);
-    avcodec_free_context(&encoderContext);
-  };
+    ~EncoderChainRing() = default;
 };
 
 #endif  // PDS_SCREEN_RECORDING_ENCODER_RING_H
