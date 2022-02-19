@@ -9,7 +9,7 @@ extern "C" {
 #include <libavformat/avformat.h>
 #include <libswresample/swresample.h>
 #include <libavutil/audio_fifo.h>
-};
+}
 
 struct SWResampleConfig {
     int inputChannels;

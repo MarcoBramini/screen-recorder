@@ -65,16 +65,31 @@ void BackEnd::startRecording() {
 }
 
 void BackEnd::stopRecording() {
-    rs->stop_recording();
-    rs.reset();
+    try {
+        rs->stop_recording();
+        rs.reset();
+    } catch (std::runtime_error error) {
+        setErrorMessage(QString{error.what()});
+        emit errorMessageChanged();
+    }
 }
 
 void BackEnd::pauseRecording() {
-    rs->pause_recording();
+    try {
+        rs->pause_recording();
+    } catch (std::runtime_error error) {
+        setErrorMessage(QString{error.what()});
+        emit errorMessageChanged();
+    }
 }
 
 void BackEnd::resumeRecording() {
-    rs->resume_recording();
+    try {
+        rs->resume_recording();
+    } catch (std::runtime_error error) {
+        setErrorMessage(QString{error.what()});
+        emit errorMessageChanged();
+    }
 }
 
 QVariantMap BackEnd::getRecordingStats() {
@@ -120,6 +135,7 @@ QList<QString> BackEnd::getAudioDevices()
         output.emplaceBack(device.getName().c_str());
     }
 
+    // Allow users to disable the audio recording
     output.emplaceBack("Disable audio");
 
     return output;
@@ -128,7 +144,7 @@ QList<QString> BackEnd::getAudioDevices()
 QList<QString> BackEnd::getOutputResolutions() {
     QList<QString> output;
     for (auto r:availableOutputResolutions) {
-        auto [width, height,factor] = r;
+        auto [width, height, factor] = r;
         output.emplaceBack((std::to_string(width)+"x"+std::to_string(height)).c_str());
     }
 
@@ -196,7 +212,6 @@ void BackEnd::updateAvailableOutputResolutions() {
 
 void BackEnd::setSelectedCaptureRegion(QVariantMap captureRegion) {
     double devicePixelRatio = getDevicePixelRatio();
-
 
     captureRegion["x"] = captureRegion["x"].toInt()*devicePixelRatio;
     captureRegion["y"] = captureRegion["y"].toInt()*devicePixelRatio;

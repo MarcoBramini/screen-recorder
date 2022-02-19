@@ -39,8 +39,6 @@ class EncoderChainRing {
 
   MuxerChainRing* next;
 
-  void init_encoder(const EncoderConfig& config);
-
  public:
   EncoderChainRing(AVStream* inputStream,
                    AVStream* outputStream,

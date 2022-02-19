@@ -2,6 +2,7 @@
 
 #include <utility>
 
+/// Processes the next packet in the packets queue
 void ProcessChain::processNext() {
     if (sourceQueue.empty()) {
         return;
@@ -15,6 +16,7 @@ void ProcessChain::processNext() {
     delete inputPacket;
 }
 
+/// Initializes the process chain using the rings passed in input.
 ProcessChain::ProcessChain(DecoderChainRing *decoderRing,
                            std::vector<FilterChainRing *> filterRings,
                            EncoderChainRing *encoderRing,
@@ -24,7 +26,6 @@ ProcessChain::ProcessChain(DecoderChainRing *decoderRing,
                                                  encoderRing(encoderRing),
                                                  muxerRing(muxerRing),
                                                  isMainProcess(isMainProcess) {
-    // Set ring nexts
     if (this->filterRings.empty()) {
         this->decoderRing->setNext(this->encoderRing);
     } else {
@@ -39,13 +40,14 @@ ProcessChain::ProcessChain(DecoderChainRing *decoderRing,
     this->encoderRing->setNext(this->muxerRing);
 }
 
+/// Enqueues a packet for processing
 void ProcessChain::enqueueSourcePacket(AVPacket *p, int64_t pts) {
     auto *processContext = new ProcessContext(p, pts);
     sourceQueue.push(processContext);
 }
 
+/// Flushes the whole chain stream
 void ProcessChain::flush() {
-    // TODO: Flush everything else
     encoderRing->flush();
 }
 

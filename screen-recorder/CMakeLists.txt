@@ -39,9 +39,7 @@ set(SOURCES
         src/recording_service/process_chain/muxer_ring.h
         src/recording_service/process_chain/encoder_ring.cpp
         src/recording_service/process_chain/encoder_ring.h
-        src/recording_service/process_chain/filter_ring.cpp
         src/recording_service/process_chain/filter_ring.h
-        src/recording_service/process_chain/process_context.cpp
         src/recording_service/process_chain/process_context.h
         src/recording_service/process_chain/swscale_filter_ring.cpp
         src/recording_service/process_chain/swscale_filter_ring.h

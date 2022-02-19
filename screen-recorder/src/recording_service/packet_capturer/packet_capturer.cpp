@@ -1,11 +1,13 @@
 #include "packet_capturer.h"
 
+#include <utility>
+
 PacketCapturer::PacketCapturer(DeviceContext *inputDevice,
                                CapturedPacketHandler onVideoPacketCapture,
                                CapturedPacketHandler onAudioPacketCapture)
         : inputDevice(inputDevice),
-          onVideoPacketCapture(onVideoPacketCapture),
-          onAudioPacketCapture(onAudioPacketCapture) {}
+          onVideoPacketCapture(std::move(onVideoPacketCapture)),
+          onAudioPacketCapture(std::move(onAudioPacketCapture)) {}
 
 // Calculates the normalized PTS of a packet.
 int64_t calculate_packet_pts(int64_t absolutePts,
@@ -24,7 +26,6 @@ void PacketCapturer::handle_captured_video_packet(AVPacket *inputVideoPacket) {
             totalPauseDuration);
     onVideoPacketCapture(videoPacket, packetPts);
 
-    lastVideoPts = packetPts;
 }
 
 // Handles a newly captured audio packet.
@@ -37,7 +38,6 @@ void PacketCapturer::handle_captured_audio_packet(AVPacket *inputAudioPacket) {
             totalPauseDuration);
     onAudioPacketCapture(audioPacket, packetPts);
 
-    lastAudioPts = packetPts;
 }
 
 // Captures a new packet from the input device
@@ -50,9 +50,10 @@ void PacketCapturer::capture_next() {
     } while (ret == AVERROR(EAGAIN));
 
     if (ret < 0) {
-        std::string error = "Capture failed with:";
-        error.append(Error::unpackAVError(ret));
-        throw std::runtime_error(error);
+        throw std::runtime_error(
+                Error::build_error_message(__FUNCTION__, {},
+                                           fmt::format("error reading frames from the input device ({})",
+                                                       Error::unpackAVError(ret))));
     }
 
     AVMediaType packetType = inputDevice->getContext()
@@ -68,7 +69,7 @@ void PacketCapturer::capture_next() {
             break;
         default:
             throw std::runtime_error(Error::build_error_message(
-                    __FUNCTION__, {}, fmt::format("unexpected packet type ({})", ret)));
+                    __FUNCTION__, {}, fmt::format("unexpected packet type ({})", std::to_string(packetType))));
     }
 
     av_packet_unref(&inputPacket);

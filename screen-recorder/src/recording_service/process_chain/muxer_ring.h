@@ -6,7 +6,7 @@
 
 extern "C" {
 #include <libavformat/avformat.h>
-};
+}
 
 class MuxerChainRing {
     DeviceContext* muxerContext;

@@ -9,16 +9,13 @@
 extern "C" {
 #include "libavcodec/avcodec.h"
 #include "libavformat/avformat.h"
-};
+}
 
 typedef std::function<void(AVPacket *packet, int64_t relativePts)>
         CapturedPacketHandler;
 
 class PacketCapturer {
     DeviceContext *inputDevice;
-
-    int64_t lastVideoPts = 0;
-    int64_t lastAudioPts = 0;
 
     int64_t totalPauseDuration = 0;
 
@@ -38,9 +35,9 @@ public:
 
     void add_pause_duration(int64_t pauseDuration);
 
-    int64_t get_pause_duration() const;
+    [[nodiscard]] int64_t get_pause_duration() const;
 
-    ~PacketCapturer() {};
+    ~PacketCapturer() = default;
 };
 
 #endif  // PDS_SCREEN_RECORDING_PACKET_CAPTURER_H

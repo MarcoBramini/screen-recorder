@@ -1,7 +1,3 @@
-//
-// Created by Marco Bramini on 01/11/21.
-//
-
 #ifndef PDS_SCREEN_RECORDING_ERROR_H
 #define PDS_SCREEN_RECORDING_ERROR_H
 

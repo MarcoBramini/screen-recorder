@@ -1,8 +1,8 @@
-#include <fmt/core.h>
 #include "swresample_filter_ring.h"
+#include <fmt/core.h>
 #include "../error.h"
-#include "../recording_service_impl.h"
 
+/// Initializes a resample filter, used to convert an input audio decoded frame to the output format
 SWResampleFilterRing::SWResampleFilterRing(SWResampleConfig swResampleConfig) : config(swResampleConfig) {
     // Allocate audio converter context
     swrContext = swr_alloc_set_opts(nullptr,
@@ -27,7 +27,7 @@ SWResampleFilterRing::SWResampleFilterRing(SWResampleConfig swResampleConfig) : 
     }
 
     // Allocate a 2 seconds FIFO buffer for converting
-    outputBuffer = av_audio_fifo_alloc(OUTPUT_AUDIO_SAMPLE_FMT,
+    outputBuffer = av_audio_fifo_alloc(config.outputSampleFormat,
                                        config.inputChannels,
                                        config.outputSampleRate * 2);
     if (!outputBuffer) {
@@ -36,34 +36,46 @@ SWResampleFilterRing::SWResampleFilterRing(SWResampleConfig swResampleConfig) : 
     }
 }
 
+/// Processes an input frame and passes it to the next ring
 void SWResampleFilterRing::execute(ProcessContext *processContext, AVFrame *inputFrame) {
     uint8_t **audioData;
     int ret = av_samples_alloc_array_and_samples(&audioData, nullptr, config.outputChannels,
-                                                 inputFrame->nb_samples, OUTPUT_AUDIO_SAMPLE_FMT, 0);
+                                                 inputFrame->nb_samples, config.outputSampleFormat, 0);
     if (ret < 0) {
-        throw std::runtime_error("Fail to alloc samples by av_samples_alloc_array_and_samples.");
+        throw std::runtime_error(
+                Error::build_error_message(__FUNCTION__, {},
+                                           fmt::format("error allocating input audio buffers ({})",
+                                                       Error::unpackAVError(ret))));
     }
 
     ret = swr_convert(swrContext, audioData, inputFrame->nb_samples,
                       (const uint8_t **) (inputFrame->extended_data),
                       inputFrame->nb_samples);
     if (ret < 0) {
-        throw std::runtime_error("Fail to swr_convert.");
+        throw std::runtime_error(
+                Error::build_error_message(__FUNCTION__, {},
+                                           fmt::format("error converting the input frame ({})",
+                                                       Error::unpackAVError(ret))));
     }
 
     if (av_audio_fifo_space(outputBuffer) < inputFrame->nb_samples)
-        throw std::runtime_error("audio buffer is too small.");
+        throw std::runtime_error(
+                Error::build_error_message(__FUNCTION__, {}, "the provided input audio buffer is too small"));
 
     ret = av_audio_fifo_write(outputBuffer, (void **) audioData, inputFrame->nb_samples);
     if (ret < 0) {
-        throw std::runtime_error("Fail to write fifo");
+        throw std::runtime_error(
+                Error::build_error_message(__FUNCTION__, {},
+                                           fmt::format("error writing to the output audio buffer ({})",
+                                                       Error::unpackAVError(ret))));
     }
 
     av_freep(&audioData[0]);
 
     AVFrame *convertedFrame = av_frame_alloc();
     if (!convertedFrame) {
-        throw std::runtime_error("Error allocating new frame");
+        throw std::runtime_error(
+                Error::build_error_message(__FUNCTION__, {}, "error allocating a new frame"));
     }
 
     int64_t framePts = processContext->sourcePacketPts;
@@ -80,14 +92,23 @@ void SWResampleFilterRing::execute(ProcessContext *processContext, AVFrame *inpu
         processContext->sourcePacketPts = framePts + frameOffset;
         frameOffset += av_rescale_q(config.outputFrameSize, config.outputTimeBase, config.inputTimeBase);
 
-        if (av_frame_get_buffer(convertedFrame, 0) < 0) {
-            throw std::runtime_error("Error reading from audio buffer");
+        ret = av_frame_get_buffer(convertedFrame, 0);
+        if (ret < 0) {
+            throw std::runtime_error(
+                    Error::build_error_message(__FUNCTION__, {},
+                                               fmt::format("error allocating the converted frame audio buffer ({})",
+                                                           Error::unpackAVError(ret))));
         }
 
-        if (av_audio_fifo_read(outputBuffer, (void **) convertedFrame->data, config.outputFrameSize) < 0) {
-            throw std::runtime_error("Error reading from audio buffer");
+        ret = av_audio_fifo_read(outputBuffer, (void **) convertedFrame->data, config.outputFrameSize);
+        if (ret < 0) {
+            throw std::runtime_error(
+                    Error::build_error_message(__FUNCTION__, {},
+                                               fmt::format("error reading from the converted frame audio buffer ({})",
+                                                           Error::unpackAVError(ret))));
         }
 
+        // Pass the converted frame to the next ring
         if (std::holds_alternative<FilterChainRing *>(getNext())) {
             std::get<FilterChainRing *>(getNext())->execute(processContext, convertedFrame);
         } else {
@@ -97,5 +118,4 @@ void SWResampleFilterRing::execute(ProcessContext *processContext, AVFrame *inpu
         av_frame_unref(convertedFrame);
     }
     av_frame_free(&convertedFrame);
-
 }

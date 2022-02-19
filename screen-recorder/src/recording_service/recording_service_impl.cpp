@@ -19,18 +19,25 @@
 
 using namespace std::chrono;
 
+/// Handles a captured video packed, enqueueing it in the video transcoder packets queue.
+/// It is used as callback for the PacketCapturer objects.
 void on_video_packet_capture(AVPacket *videoPacket,
                              int64_t relativePts,
                              ProcessChain *videoTranscodeChain) {
     videoTranscodeChain->enqueueSourcePacket(videoPacket, relativePts);
 }
 
+/// Handles a captured audio packed, enqueueing it in the audio transcoder packets queue.
+/// It is used as callback for the PacketCapturer objects.
 void on_audio_packet_capture(AVPacket *audioPacket,
                              int64_t relativePts,
                              ProcessChain *audioTranscodeChain) {
     audioTranscodeChain->enqueueSourcePacket(audioPacket, relativePts);
 }
 
+/// Starts the packet capture loop.
+/// It temporarily stops if the recording process is paused.
+/// The loop exits when the recording proces is stopped.
 void RecordingServiceImpl::start_capture_loop(PacketCapturer *capturer) {
     while (recordingStatus == RECORDING || recordingStatus == PAUSE) {
         // TODO: use pause cond var
@@ -41,6 +48,9 @@ void RecordingServiceImpl::start_capture_loop(PacketCapturer *capturer) {
     }
 }
 
+/// Processes all the captured packets in the a/v transcoder packets queue.
+/// It temporarily stops if the queue is empty but the recording process is still active (e.g. paused).
+/// The loop exits when the queue is empty and the recording process is stopped.
 void RecordingServiceImpl::start_transcode_process(ProcessChain *transcodeChain) {
     while (true) {
         // TODO: use cond var to handle empty queue
@@ -54,6 +64,8 @@ void RecordingServiceImpl::start_transcode_process(ProcessChain *transcodeChain)
     }
 }
 
+/// Starts the recording process.
+/// It writes the output file header and starts all the needed sub processes.
 int RecordingServiceImpl::start_recording() {
     // Write output file header
     int ret = avformat_write_header(outputMuxer->getContext(), nullptr);
@@ -100,6 +112,7 @@ int RecordingServiceImpl::start_recording() {
     return 0;
 }
 
+/// Pause the recording process
 int RecordingServiceImpl::pause_recording() {
     // Set pauseTimestamp
     pauseTimestamp =
@@ -112,6 +125,7 @@ int RecordingServiceImpl::pause_recording() {
     return 0;
 }
 
+/// Resume the recording process
 int RecordingServiceImpl::resume_recording() {
     // Increment pausedTime by resumeTimestamp - pauseTimestamp interval
     int64_t resumeTimestamp =
@@ -128,6 +142,9 @@ int RecordingServiceImpl::resume_recording() {
     return 0;
 }
 
+/// Stops the recording process
+/// Waits for the sub-processes to end. Remaining captured packets are flushed.
+/// Finally, it writes the output file trailer.
 int RecordingServiceImpl::stop_recording() {
     if (recordingStatus == IDLE || recordingStatus == STOP)
         return 0;
@@ -160,20 +177,7 @@ int RecordingServiceImpl::stop_recording() {
     return 0;
 }
 
-/// Initializes all the structures needed for the recording process.
-/// Accepts deviceAddresses as input in the following format:
-///   deviceAddress: "{deviceID}:{url}"
-///
-/// Examples:
-///   - MacOS
-///       videoAddress:"avfoundation:1"
-///       audioAddress:"avfoundation:1"
-///   - Linux
-///       videoAddress:"x11grab:...."
-///       audioAddress:"pulse:....."
-///   - Windows
-///       videoAddress:"dshow:...."
-///       audioAddress:"dshow:...."
+/// Initializes all the structures needed for the recording process
 RecordingServiceImpl::RecordingServiceImpl(const RecordingConfig &config) {
     recordingStatus = IDLE;
     startTimestamp = 0;
@@ -327,24 +331,29 @@ RecordingServiceImpl::RecordingServiceImpl(const RecordingConfig &config) {
     }
 
     // Init packet capturers
+    auto onVideoPacketCaptureCallback = [this](AVPacket *videoPacket, int64_t relativePts) {
+        return on_video_packet_capture(videoPacket, relativePts, videoTranscodeChain);
+    };
+
+    auto onAudioPacketCaptureCallback = [this](AVPacket *audioPacket, int64_t relativePts) {
+        return on_audio_packet_capture(audioPacket, relativePts, audioTranscodeChain);
+    };
+
     mainDeviceCapturer = new PacketCapturer(
             mainDevice,
-            std::bind(&on_video_packet_capture, std::placeholders::_1,
-                      std::placeholders::_2, videoTranscodeChain),
-            std::bind(&on_audio_packet_capture, std::placeholders::_1,
-                      std::placeholders::_2, audioTranscodeChain));
+            onVideoPacketCaptureCallback,
+            onAudioPacketCaptureCallback);
 
     if (mainDevice != auxDevice && !isAudioDisabled) {
         auxDeviceCapturer = new PacketCapturer(
                 auxDevice,
-                std::bind(&on_video_packet_capture, std::placeholders::_1,
-                          std::placeholders::_2, videoTranscodeChain),
-                std::bind(&on_audio_packet_capture, std::placeholders::_1,
-                          std::placeholders::_2, audioTranscodeChain));
+                onVideoPacketCaptureCallback,
+                onAudioPacketCaptureCallback);
     }
 
     // Init control thread
-    if (config.isUseControlThread()) {
+    useControlThread = config.isUseControlThread();
+    if (useControlThread) {
         controlThread = std::thread([this]() {
             std::cout << "Tap Pause(p), Resume(r) or Stop(s)" << std::endl;
             char c;
@@ -366,11 +375,14 @@ RecordingServiceImpl::RecordingServiceImpl(const RecordingConfig &config) {
     }
 }
 
-// Used to wait on the control thread to finish when useControlThread is enabled
+/// Wait for the control thread to return.
+/// Must be only used when useControlThread is enabled.
 void RecordingServiceImpl::wait_recording() {
-    controlThread.join();
+    if (useControlThread)
+        controlThread.join();
 }
 
+/// Returns information about the currently active recording
 RecordingStats RecordingServiceImpl::get_recording_stats() {
     int64_t duration = 0;
     if (recordingStatus == RECORDING || recordingStatus == PAUSE) {

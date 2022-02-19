@@ -9,7 +9,7 @@ extern "C" {
 #include <libavfilter/buffersrc.h>
 #include <libavformat/avformat.h>
 #include <libavutil/opt.h>
-};
+}
 
 struct VFCropConfig {
     int inputWidth;

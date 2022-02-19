@@ -1,12 +1,12 @@
 #include <fmt/core.h>
 #include "recording_service_impl.h"
 
-/// Returns the options associated to an input device.
+/// Returns the default options associated to an input device.
 std::map<std::string, std::string> RecordingServiceImpl::get_device_options(
         const std::string &deviceID,
-        RecordingConfig config) {
+        const RecordingConfig& config) {
     if (deviceID == "avfoundation") {
-        return {{"video_size",     "1000x500"},
+        return {{"pixel_format",   "uyvy422"},
                 {"framerate",      std::to_string(config.getFramerate())},
                 {"capture_cursor", "true"}};
     }
@@ -23,9 +23,11 @@ std::map<std::string, std::string> RecordingServiceImpl::get_device_options(
     return {};
 }
 
+/// Unpacks a deviceAddress.
+/// The accepted device address format is: "{deviceID}:{url}"
 std::tuple<std::string, std::string> RecordingServiceImpl::unpackDeviceAddress(
         const std::string &deviceAddress) {
-    int delimiterIndex = deviceAddress.find(':');
+    size_t delimiterIndex = deviceAddress.find(':');
     std::string deviceID = deviceAddress.substr(0, delimiterIndex);
     std::string url =
             deviceAddress.substr(delimiterIndex + 1, deviceAddress.length());
@@ -37,11 +39,11 @@ inline int make_even(int n) {
     return n - n % 2;
 }
 
-// Calculates the parameters of the output image.
-// Returns:
-// - encoderOutputWidth, encoderOutputHeight: the real output image resolution
-// - scalerOutputWidth, scalerOutputHeight: the intermediate image resolution (same as the encoder resolution for fullscreen recording)
-// - cropOriginX, cropOriginY: origin of the image (0 for fullscreen recording)
+/// Calculates the parameters of the output image.
+/// Returns:
+/// - encoderOutputWidth, encoderOutputHeight: the real output image resolution
+/// - scalerOutputWidth, scalerOutputHeight: the intermediate image resolution (same as the encoder resolution for fullscreen recording)
+/// - cropOriginX, cropOriginY: origin of the image (0 for fullscreen recording)
 std::tuple<int, int, int, int, int, int> RecordingServiceImpl::get_output_image_parameters(
         int deviceInputWidth,
         int deviceInputHeight,

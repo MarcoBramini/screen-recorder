@@ -32,7 +32,8 @@ DecoderChainRing::DecoderChainRing(AVStream *inputStream) {
     }
 }
 
-void DecoderChainRing::execute(ProcessContext* processContext) {
+/// Processes an input packet and passes the decoded frame to the next ring.
+void DecoderChainRing::execute(ProcessContext *processContext) {
     AVFrame *decodedFrame = av_frame_alloc();
     if (decodedFrame == nullptr) {
         throw std::runtime_error(Error::build_error_message(__FUNCTION__, {}, "error allocating frame"));
@@ -40,7 +41,10 @@ void DecoderChainRing::execute(ProcessContext* processContext) {
 
     int response = avcodec_send_packet(decoderContext, processContext->sourcePacket);
     if (response < 0) {
-        throw std::runtime_error(Error::build_error_message(__FUNCTION__, {}, "error sending packet to the decoder"));
+        throw std::runtime_error(
+                Error::build_error_message(__FUNCTION__, {},
+                                           fmt::format("error sending packet to the decoder ({})",
+                                                       Error::unpackAVError(response))));
     }
 
     while (response >= 0) {
@@ -49,9 +53,12 @@ void DecoderChainRing::execute(ProcessContext* processContext) {
             break;
         } else if (response < 0) {
             throw std::runtime_error(
-                    Error::build_error_message(__FUNCTION__, {}, "error receiving packet from the decoder"));
+                    Error::build_error_message(__FUNCTION__, {},
+                                               fmt::format("error receiving packet from the decoder ({})",
+                                                           Error::unpackAVError(response))));
         }
 
+        // Pass the decoded frame to the next ring
         if (response >= 0) {
             if (std::holds_alternative<FilterChainRing *>(next)) {
                 std::get<FilterChainRing *>(next)->execute(processContext, decodedFrame);

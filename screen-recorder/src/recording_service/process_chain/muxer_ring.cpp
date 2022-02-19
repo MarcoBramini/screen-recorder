@@ -2,8 +2,10 @@
 #include <fmt/core.h>
 #include "../error.h"
 
+/// Initializes the muxer
 MuxerChainRing::MuxerChainRing(DeviceContext* muxerContext): muxerContext(muxerContext) {}
 
+/// Processes an input encoded packet and writes it to the output
 void MuxerChainRing::execute(ProcessContext* processContext, AVPacket* inputPacket) {
     int ret = av_interleaved_write_frame(muxerContext->getContext(), inputPacket);
     if (ret < 0) {

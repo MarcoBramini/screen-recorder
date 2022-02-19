@@ -6,7 +6,7 @@
 extern "C" {
 #include <libavformat/avformat.h>
 #include <libswscale/swscale.h>
-};
+}
 
 struct SWScaleConfig {
     int inputWidth;

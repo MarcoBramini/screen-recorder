@@ -7,7 +7,7 @@
 
 extern "C" {
 #include <libavformat/avformat.h>
-};
+}
 
 class FilterChainRing {
     std::variant<FilterChainRing *, EncoderChainRing *> next;

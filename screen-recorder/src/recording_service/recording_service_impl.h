@@ -54,6 +54,8 @@ class RecordingServiceImpl {
     std::thread auxDeviceCaptureThread;
     std::thread capturedVideoPacketsProcessThread;
     std::thread capturedAudioPacketsProcessThread;
+
+    bool useControlThread;
     std::thread controlThread;
 
     // ------
@@ -90,7 +92,7 @@ class RecordingServiceImpl {
     // recording_utils.cpp
     static std::map<std::string, std::string> get_device_options(
         const std::string &deviceID,
-        RecordingConfig config);
+        const RecordingConfig& config);
 
     static std::tuple<std::string, std::string> unpackDeviceAddress(
         const std::string &deviceAddress);
