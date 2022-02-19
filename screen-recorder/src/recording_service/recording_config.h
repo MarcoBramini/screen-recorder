@@ -14,7 +14,7 @@ class RecordingConfig {
     std::string outputDir;
     std::string outputPath;
     std::optional<std::tuple<int, int, int, int>> captureRegion;            // x,y,width,height from top left
-    std::optional<std::tuple<int, int>> outputResolution;                // width,height
+    std::optional<std::tuple<int, int, double>> outputResolution;                // width,height,scalingFactor
     int framerate = 30;
     bool useControlThread = true;     // used to keep the process running without assigning a thread
 
@@ -26,6 +26,8 @@ public:
     [[nodiscard]] const std::string &getAudioAddress() const;
 
     void setAudioAddress(const std::string &address);
+
+    void disableAudio();
 
     [[nodiscard]] const std::string &getOutputDir() const;
 
@@ -39,11 +41,11 @@ public:
 
     void resetCaptureRegion();
 
-    static std::vector<std::tuple<int, int>> getOutputResolutionsChoices(int inputWidth, int inputHeight);
+    static std::vector<std::tuple<int, int, double>> getOutputResolutionsChoices(int inputWidth, int inputHeight);
 
-    [[nodiscard]] const std::optional<std::tuple<int, int>> &getOutputResolution() const;
+    [[nodiscard]] const std::optional<std::tuple<int, int, double>> &getOutputResolution() const;
 
-    void setOutputResolution(std::tuple<int, int> resolution);
+    void setOutputResolution(std::tuple<int, int, double> resolution);
 
     [[nodiscard]] int getFramerate() const;
 

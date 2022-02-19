@@ -54,25 +54,25 @@ std::tuple<int, int, int, int, int, int> RecordingServiceImpl::get_output_image_
     int cropOriginX = 0;
     int cropOriginY = 0;
 
-    // Set output resolution
-    if (config.getOutputResolution().has_value()) {
-        auto[width, height] = config.getOutputResolution().value();
-        width = make_even(width);
-        height = make_even(height);
+    double scalingFactor = 1;
 
-        encoderOutputWidth = width;
-        encoderOutputHeight = height;
-        scalerOutputWidth = width;
-        scalerOutputHeight = height;
+    if (config.getOutputResolution().has_value()) {
+        auto[width, height, factor] = config.getOutputResolution().value();
+        scalingFactor = factor;
+
+        encoderOutputWidth = make_even((int) (encoderOutputWidth * scalingFactor));
+        encoderOutputHeight = make_even((int) (encoderOutputHeight * scalingFactor));
+        scalerOutputWidth = encoderOutputWidth;
+        scalerOutputHeight = encoderOutputHeight;
     }
 
     if (config.getCaptureRegion().has_value()) {
         auto[x, y, width, height] = config.getCaptureRegion().value();
 
-        encoderOutputWidth = make_even(width);
-        encoderOutputHeight = make_even(height);
-        cropOriginX = make_even(x);
-        cropOriginY = make_even(y);
+        encoderOutputWidth = make_even((int) (width * scalingFactor));
+        encoderOutputHeight = make_even((int) (height * scalingFactor));
+        cropOriginX = make_even((int) (x * scalingFactor));
+        cropOriginY = make_even((int) (y * scalingFactor));
 
     }
 

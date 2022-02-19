@@ -24,7 +24,7 @@ class SWScaleFilterRing : public FilterChainRing {
 public:
     explicit SWScaleFilterRing(SWScaleConfig config);
 
-    ~SWScaleFilterRing() { sws_freeContext(swsContext); }
+    ~SWScaleFilterRing() override { sws_freeContext(swsContext); }
 
     void execute(ProcessContext* processContext, AVFrame *inputFrame) override;
 };

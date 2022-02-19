@@ -12,4 +12,3 @@ void MuxerChainRing::execute(ProcessContext* processContext, AVPacket* inputPack
     }
 }
 
-MuxerChainRing::~MuxerChainRing() {  };

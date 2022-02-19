@@ -48,7 +48,7 @@ Window {
 
                 Label {
                     id: outputDirValue
-                    width: 300
+                    width: 250
                     text: backend.outputDir
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.right: outputDirButton.left
@@ -226,6 +226,7 @@ Window {
 
                 ScreenRegionSelector {
                     id: screenRegionSelector
+
                     onCaptureRegionSelected: function (x, y, width, height) {
                         // Propagate capture region change
                         var captureRegion = {}

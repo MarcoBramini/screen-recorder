@@ -12,33 +12,37 @@ extern "C" {
 };
 
 struct VFCropConfig {
-  int inputWidth;
-  int inputHeight;
-  AVPixelFormat inputPixelFormat;
-  AVRational inputTimeBase;
-  AVRational inputAspectRatio;
+    int inputWidth;
+    int inputHeight;
+    AVPixelFormat inputPixelFormat;
+    AVRational inputTimeBase;
+    AVRational inputAspectRatio;
 
-  int originX;
-  int originY;
+    int originX;
+    int originY;
 
-  int outputWidth;
-  int outputHeight;
-  AVPixelFormat outputPixelFormat;
+    int outputWidth;
+    int outputHeight;
+    AVPixelFormat outputPixelFormat;
 };
 
 class VFCropFilterRing : public FilterChainRing {
-  VFCropConfig config;
+    VFCropConfig config;
 
-  AVFilterContext* buffersink_ctx;
-  AVFilterContext* buffersrc_ctx;
-  AVFilterGraph* filter_graph;
+    AVFilterContext *buffersink_ctx;
+    AVFilterContext *buffersrc_ctx;
+    AVFilterGraph *filter_graph;
 
- public:
-  explicit VFCropFilterRing(VFCropConfig config);
+public:
+    explicit VFCropFilterRing(VFCropConfig config);
 
-  ~VFCropFilterRing() { avfilter_graph_free(&filter_graph); }
+    ~VFCropFilterRing() override {
+        avfilter_graph_free(&filter_graph);
+        avfilter_free(buffersink_ctx);
+        avfilter_free(buffersrc_ctx);
+    }
 
-  void execute(ProcessContext* processContext, AVFrame* inputFrame) override;
+    void execute(ProcessContext *processContext, AVFrame *inputFrame) override;
 };
 
 #endif  // PDS_SCREEN_RECORDING_VFCROP_FILTER_RING_H

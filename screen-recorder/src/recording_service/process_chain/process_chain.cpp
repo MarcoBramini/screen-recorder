@@ -15,12 +15,15 @@ void ProcessChain::processNext() {
     delete inputPacket;
 }
 
-ProcessChain::ProcessChain(DecoderChainRing *decoderRing, std::vector<FilterChainRing *> filterRings,
-                           EncoderChainRing *encoderRing, MuxerChainRing *muxerRing) : decoderRing(decoderRing),
-                                                                                       filterRings(
-                                                                                               std::move(filterRings)),
-                                                                                       encoderRing(encoderRing),
-                                                                                       muxerRing(muxerRing) {
+ProcessChain::ProcessChain(DecoderChainRing *decoderRing,
+                           std::vector<FilterChainRing *> filterRings,
+                           EncoderChainRing *encoderRing,
+                           MuxerChainRing *muxerRing,
+                           bool isMainProcess) : decoderRing(decoderRing),
+                                                 filterRings(std::move(filterRings)),
+                                                 encoderRing(encoderRing),
+                                                 muxerRing(muxerRing),
+                                                 isMainProcess(isMainProcess) {
     // Set ring nexts
     if (this->filterRings.empty()) {
         this->decoderRing->setNext(this->encoderRing);

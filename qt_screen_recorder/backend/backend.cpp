@@ -2,6 +2,7 @@
 #include <QStandardPaths>
 #include <QGuiApplication>
 #include <QScreen>
+#include <QDateTime>
 
 std::tuple<int,int> getScreenResolution() {
     QScreen *primaryScreen = QGuiApplication::primaryScreen();
@@ -9,14 +10,29 @@ std::tuple<int,int> getScreenResolution() {
     return {screenGeometry.width(), screenGeometry.height()};
 }
 
+double getDevicePixelRatio() {
+    QScreen *primaryScreen = QGuiApplication::primaryScreen();
+    double devicePixelRatio = primaryScreen->devicePixelRatio();
+    return devicePixelRatio;
+}
+
 BackEnd::BackEnd(QObject *parent) :
     QObject(parent)
 {
+    m_errorMessage = "";
+    m_outputDir = "";
+    m_selectedAudioDeviceIndex = -1;
+    m_selectedCaptureRegion = {};
+    m_selectedFramerateIndex = -1;
+    m_selectedOutputResolutionIndex = -1;
+    m_selectedVideoDeviceIndex = -1;
+
     availableVideoDevices = DeviceService::get_input_video_devices();
     availableAudioDevices = DeviceService::get_input_audio_devices();
 
     auto [width, height] = getScreenResolution();
-    availableOutputResolutions = RecordingConfig::getOutputResolutionsChoices(width, height);
+    double devicePixelRatio = getDevicePixelRatio();
+    availableOutputResolutions = RecordingConfig::getOutputResolutionsChoices(width*devicePixelRatio, height*devicePixelRatio);
 
     config = {};
     config.setUseControlThread(false);
@@ -38,12 +54,19 @@ BackEnd::BackEnd(QObject *parent) :
 }
 
 void BackEnd::startRecording() {
-    rs = std::move(std::make_unique<RecordingService>(config));
-    rs->start_recording();
+    try {
+        std::cout<<config.getVideoAddress()<<std::endl;
+        rs = std::move(std::make_unique<RecordingService>(config));
+        rs->start_recording();
+    } catch (std::runtime_error error) {
+        setErrorMessage(QString{error.what()});
+        emit errorMessageChanged();
+    }
 }
 
 void BackEnd::stopRecording() {
     rs->stop_recording();
+    rs.reset();
 }
 
 void BackEnd::pauseRecording() {
@@ -52,6 +75,20 @@ void BackEnd::pauseRecording() {
 
 void BackEnd::resumeRecording() {
     rs->resume_recording();
+}
+
+QVariantMap BackEnd::getRecordingStats() {
+    if (rs == nullptr) return {};
+
+    QVariantMap output;
+    RecordingStats stats = rs->get_recording_stats();
+    output["status"] = stats.status;
+
+    QDateTime timestamp;
+    timestamp.setSecsSinceEpoch(stats.recordingDuration);
+    output["recordingDuration"] = timestamp.toUTC().toString("HH:mm:ss");
+
+    return output;
 }
 
 QString BackEnd::getOutputDir() {
@@ -83,13 +120,15 @@ QList<QString> BackEnd::getAudioDevices()
         output.emplaceBack(device.getName().c_str());
     }
 
+    output.emplaceBack("Disable audio");
+
     return output;
 }
 
 QList<QString> BackEnd::getOutputResolutions() {
     QList<QString> output;
     for (auto r:availableOutputResolutions) {
-        auto [width, height] = r;
+        auto [width, height,factor] = r;
         output.emplaceBack((std::to_string(width)+"x"+std::to_string(height)).c_str());
     }
 
@@ -116,7 +155,11 @@ void BackEnd::setSelectedAudioDeviceIndex(int index) {
     if (index == m_selectedAudioDeviceIndex) return;
 
     m_selectedAudioDeviceIndex = index;
-    config.setAudioAddress(availableAudioDevices[index].getDeviceAddress());
+    if (index >= availableAudioDevices.size()) {
+        config.disableAudio();
+    } else {
+        config.setAudioAddress(availableAudioDevices[index].getDeviceAddress());
+    }
     emit selectedAudioDeviceIndexChanged();
 }
 
@@ -125,7 +168,6 @@ int BackEnd::getSelectedOutputResolutionIndex() {
 }
 
 void BackEnd::setSelectedOutputResolutionIndex(int index) {
-    std::cout<<"asd"<<std::endl;
     if (index == m_selectedOutputResolutionIndex) return;
 
     m_selectedOutputResolutionIndex = index;
@@ -140,17 +182,26 @@ QVariantMap BackEnd::getSelectedCaptureRegion() {
 // Updates the available resolutions and resets the user choice to default
 void BackEnd::updateAvailableOutputResolutions() {
     int width,height;
+    double devicePixelRatio = getDevicePixelRatio();
     if (config.getCaptureRegion().has_value()) {
         std::tie(std::ignore,std::ignore,width, height) = config.getCaptureRegion().value();
     } else {
         std::tie(width, height) = getScreenResolution();
+        width *= devicePixelRatio;
+        height *= devicePixelRatio;
     }
     availableOutputResolutions = RecordingConfig::getOutputResolutionsChoices(width, height);
     setSelectedOutputResolutionIndex(0);
 }
 
 void BackEnd::setSelectedCaptureRegion(QVariantMap captureRegion) {
-    if (captureRegion == m_selectedCaptureRegion) return;
+    double devicePixelRatio = getDevicePixelRatio();
+
+
+    captureRegion["x"] = captureRegion["x"].toInt()*devicePixelRatio;
+    captureRegion["y"] = captureRegion["y"].toInt()*devicePixelRatio;
+    captureRegion["width"] = captureRegion["width"].toInt()*devicePixelRatio;
+    captureRegion["height"] = captureRegion["height"].toInt()*devicePixelRatio;
 
     m_selectedCaptureRegion = captureRegion;
     config.setCaptureRegion(captureRegion["x"].toInt(),captureRegion["y"].toInt(),captureRegion["width"].toInt(), captureRegion["height"].toInt());
@@ -190,4 +241,15 @@ void BackEnd::setSelectedFramerateIndex(int index) {
     config.setFramerate(availableFramerates[index]);
 
     emit selectedFramerateIndexChanged();
+}
+
+QString BackEnd::getErrorMessage() {
+    return m_errorMessage;
+}
+
+void BackEnd::setErrorMessage(QString message) {
+    if (message == m_errorMessage) return;
+
+    m_errorMessage = message;
+    emit errorMessageChanged();
 }

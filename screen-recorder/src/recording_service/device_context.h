@@ -17,8 +17,8 @@ class DeviceContext {
     AVStream *audioStream;
 
     static AVFormatContext *init_input_device(const std::string &deviceID, const std::string &videoURL,
-                                              const std::string &audioURL,
-                                              const std::map<std::string, std::string> &optionsMap);
+            const std::string &audioURL,
+            const std::map<std::string, std::string> &optionsMap);
 
     int find_main_stream(AVMediaType streamType);
 
@@ -30,13 +30,19 @@ public:
                  const std::map<std::string, std::string> &optionsMap);
 
 
-    static DeviceContext *init_muxer(const std::string &outputFileName);
+    static DeviceContext *init_muxer(const std::string &outputFileName, bool isAudioDisabled);
 
-    AVFormatContext *getContext() { return this->avfc; };
+    AVFormatContext *getContext() {
+        return this->avfc;
+    };
 
-    AVStream *getVideoStream() { return this->videoStream; };
+    AVStream *getVideoStream() {
+        return this->videoStream;
+    };
 
-    AVStream *getAudioStream() { return this->audioStream; };
+    AVStream *getAudioStream() {
+        return this->audioStream;
+    };
 
     ~DeviceContext() {
         avformat_close_input(&avfc);

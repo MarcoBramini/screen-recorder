@@ -33,7 +33,10 @@ class SWResampleFilterRing : public FilterChainRing {
 public:
     explicit SWResampleFilterRing(SWResampleConfig config);
 
-    ~SWResampleFilterRing() { swr_free(&swrContext); }
+    ~SWResampleFilterRing() override {
+        swr_free(&swrContext);
+        av_audio_fifo_free(outputBuffer);
+    }
 
     void execute(ProcessContext *processContext, AVFrame *inputFrame) override;
 };

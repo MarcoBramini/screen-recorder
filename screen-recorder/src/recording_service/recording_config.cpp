@@ -19,6 +19,10 @@ void RecordingConfig::setAudioAddress(const std::string &address) {
     audioAddress = address;
 }
 
+void RecordingConfig::disableAudio() {
+    audioAddress = "";
+}
+
 const std::string &RecordingConfig::getOutputDir() const {
     return outputDir;
 }
@@ -30,7 +34,7 @@ std::string RecordingConfig::getOutputPath() const {
     auto tm = *std::localtime(&t);
 
     std::filesystem::path filename(
-        fmt::format("rec_{}-{}-{}T{}-{}.mp4", tm.tm_year, tm.tm_mon+1, tm.tm_mday, tm.tm_hour, tm.tm_min));
+        fmt::format("rec_{}-{}-{}T{}-{}.mp4", tm.tm_year, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min));
 
     std::string output = (dir / filename).string();
 
@@ -67,23 +71,25 @@ inline int make_even(int n) {
 
 // Returns a list of resolutions which the user can select.
 // The resolutions are obtained by scaling the input resolution by these factors: [1, 0.75, 0.5, 0.25]
-std::vector<std::tuple<int, int>> RecordingConfig::getOutputResolutionsChoices(int inputWidth, int inputHeight) {
-    std::vector<std::tuple<int, int>> outputResolutions;
+std::vector<std::tuple<int, int, double>>
+RecordingConfig::getOutputResolutionsChoices(int inputWidth, int inputHeight) {
+    std::vector<std::tuple<int, int, double>> outputResolutions;
 
     std::vector<double> factors = {1, 0.75, 0.5, 0.25};
 
     outputResolutions.reserve(factors.size());
     for (auto factor: factors) {
-        outputResolutions.emplace_back(make_even((int) (inputWidth * factor)), make_even((int) (inputHeight * factor)));
+        outputResolutions.emplace_back(make_even((int) (inputWidth * factor)), make_even((int) (inputHeight * factor)),
+                                       factor);
     }
     return outputResolutions;
 }
 
-const std::optional<std::tuple<int, int>> &RecordingConfig::getOutputResolution() const {
+const std::optional<std::tuple<int, int, double>> &RecordingConfig::getOutputResolution() const {
     return outputResolution;
 }
 
-void RecordingConfig::setOutputResolution(std::tuple<int, int> resolution) {
+void RecordingConfig::setOutputResolution(std::tuple<int, int, double> resolution) {
     outputResolution = resolution;
 }
 

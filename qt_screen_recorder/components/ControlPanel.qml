@@ -4,7 +4,7 @@ import "MaterialDesignIcon"
 
 Rectangle {
     id: controlPanel
-    width: 600
+    width: 530
     height: 125
     visible: true
     color: "#595959"
@@ -17,10 +17,10 @@ Rectangle {
 
     MouseArea {
         id: mouseArea
-        x: 0
-        y: 0
-        width: 600
         height: 25
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
         acceptedButtons: Qt.LeftButton
 
         property point clickPos: "1,1"
@@ -47,10 +47,14 @@ Rectangle {
 
     Row {
         id: row
-        width: 494
-        height: 85
-        anchors.verticalCenter: parent.verticalCenter
-        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 19
+        anchors.topMargin: 20
+        anchors.rightMargin: 25
+        anchors.leftMargin: 25
 
         RoundButton {
             id: recButton
@@ -59,6 +63,8 @@ Rectangle {
             visible: true
             anchors.verticalCenter: parent.verticalCenter
             anchors.left: parent.left
+            hoverEnabled: false
+            enabled: false
             anchors.leftMargin: 0
             scale: 1.015
             display: AbstractButton.TextBesideIcon
@@ -66,7 +72,7 @@ Rectangle {
             indicator: MaterialDesignIcon {
                 id: materialDesignIcon
                 name: "record"
-                visible: true
+                visible: false
                 anchors.fill: parent
                 scale: 0.5
             }
@@ -76,6 +82,41 @@ Rectangle {
                 onClicked: {
                     controlPanel.state = "recording"
                     backend.startRecording()
+                }
+            }
+
+            BusyIndicator {
+                id: busyIndicator
+                visible: true
+                anchors.fill: parent
+                scale: 1
+                layer.textureSize.width: 1
+                anchors.rightMargin: 16
+                anchors.leftMargin: 16
+                anchors.bottomMargin: 16
+                anchors.topMargin: 16
+            }
+
+            Label {
+                id: recButtonLabel
+                visible: false
+                text: "00:00:00"
+                anchors.top: parent.bottom
+                anchors.topMargin: 0
+                anchors.horizontalCenter: parent.horizontalCenter
+                color: Material.color(Material.Red)
+
+                Item {
+                    Timer {
+                        interval: 100
+                        running: controlPanel.state === "recording"
+                        repeat: true
+                        onTriggered: {
+                            var stats = backend.getRecordingStats()
+                            if (Object.keys(stats).length !== 0)
+                                recButtonLabel.text = stats["recordingDuration"]
+                        }
+                    }
                 }
             }
         }
@@ -108,7 +149,9 @@ Rectangle {
                         return
                     }
                     controlPanel.state = "recording"
+                    busyIndicator.visible = true
                     backend.resumeRecording()
+                    busyIndicator.visible = false
                 }
             }
         }
@@ -136,8 +179,11 @@ Rectangle {
             Connections {
                 target: stopButton
                 onClicked: {
-                    controlPanel.state = ""
+                    recButtonLabel.text = "00:00:00"
+                    controlPanel.state = "ready"
+                    busyIndicator.visible = true
                     backend.stopRecording()
+                    busyIndicator.visible = false
                 }
             }
         }
@@ -145,8 +191,8 @@ Rectangle {
         ToolSeparator {
             id: toolSeparator
             anchors.verticalCenter: parent.verticalCenter
-            anchors.right: configButton.left
-            anchors.rightMargin: 0
+            anchors.left: stopButton.right
+            anchors.leftMargin: 16
         }
 
         RoundButton {
@@ -154,8 +200,8 @@ Rectangle {
             width: 74
             height: 74
             anchors.verticalCenter: parent.verticalCenter
-            anchors.right: quitButton.left
-            anchors.rightMargin: 16
+            anchors.left: toolSeparator.right
+            anchors.leftMargin: 16
             scale: 1.015
             display: AbstractButton.TextBesideIcon
             indicator: MaterialDesignIcon {
@@ -171,7 +217,7 @@ Rectangle {
                 onClicked: {
                     (configPanel.visible) ? configPanel.hide(
                                                 ) : configPanel.show()
-                    controlPanel.state = (controlPanel.state === "config") ? "" : "config"
+                    controlPanel.state = (controlPanel.state === "config") ? "ready" : "config"
                 }
             }
         }
@@ -181,7 +227,8 @@ Rectangle {
             width: 74
             height: 74
             anchors.verticalCenter: parent.verticalCenter
-            anchors.right: parent.right
+            anchors.left: configButton.right
+            anchors.leftMargin: 16
             display: AbstractButton.TextBesideIcon
             scale: 1.015
             indicator: MaterialDesignIcon {
@@ -191,7 +238,6 @@ Rectangle {
                 anchors.fill: parent
                 scale: 0.5
             }
-            anchors.rightMargin: 0
             Connections {
                 target: quitButton
                 onClicked: {
@@ -243,6 +289,25 @@ Rectangle {
             PropertyChanges {
                 target: materialDesignIcon
                 color: Material.color(Material.Red)
+                visible: true
+            }
+
+            PropertyChanges {
+                target: recButtonLabel
+                x: 20
+                y: 70
+                visible: true
+            }
+
+            PropertyChanges {
+                target: busyIndicator
+                visible: false
+            }
+
+            PropertyChanges {
+                target: quitButton
+                hoverEnabled: false
+                enabled: false
             }
         },
         State {
@@ -252,6 +317,11 @@ Rectangle {
                 target: configButton
                 enabled: true
                 highlighted: true
+            }
+
+            PropertyChanges {
+                target: materialDesignIcon
+                visible: true
             }
 
             PropertyChanges {
@@ -277,6 +347,11 @@ Rectangle {
                 target: recButton
                 hoverEnabled: false
                 enabled: false
+            }
+
+            PropertyChanges {
+                target: busyIndicator
+                visible: false
             }
         },
         State {
@@ -313,11 +388,48 @@ Rectangle {
             PropertyChanges {
                 target: materialDesignIcon
                 color: Material.color(Material.Red)
+                visible: true
             }
 
             PropertyChanges {
                 name: "play"
                 target: materialDesignIcon1
+            }
+
+            PropertyChanges {
+                target: recButtonLabel
+                visible: true
+            }
+
+            PropertyChanges {
+                target: busyIndicator
+                visible: false
+            }
+
+            PropertyChanges {
+                target: quitButton
+                hoverEnabled: false
+                enabled: false
+            }
+        },
+        State {
+            name: "ready"
+
+            PropertyChanges {
+                target: recButton
+                visible: true
+                hoverEnabled: true
+                enabled: true
+            }
+
+            PropertyChanges {
+                target: materialDesignIcon
+                visible: true
+            }
+
+            PropertyChanges {
+                target: busyIndicator
+                visible: false
             }
         }
     ]

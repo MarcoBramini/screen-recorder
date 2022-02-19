@@ -16,7 +16,7 @@ public:
 
     void execute(ProcessContext* processContext, AVPacket* inputPacket);
 
-    ~MuxerChainRing();
+    ~MuxerChainRing() = default;
 };
 
 

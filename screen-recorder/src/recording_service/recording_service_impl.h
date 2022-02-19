@@ -32,27 +32,35 @@ enum RecordingStatus {
     IDLE, RECORDING, PAUSE, STOP
 };
 
+struct RecordingStats {
+    RecordingStatus status;
+    int64_t recordingDuration; // seconds
+};
+
 class RecordingServiceImpl {
     // ------
     // Status
     // ------
     RecordingStatus recordingStatus;
-    int64_t pauseTimestamp;
+    int64_t startTimestamp; // microseconds
+    int64_t pauseTimestamp;// microseconds
+    int64_t stopTimestamp;// microseconds
 
     // -------
     // Threads
     // -------
 
-    std::thread videoCaptureThread;
-    std::thread audioCaptureThread;
+    std::thread mainDeviceCaptureThread;
+    std::thread auxDeviceCaptureThread;
     std::thread capturedVideoPacketsProcessThread;
     std::thread capturedAudioPacketsProcessThread;
-    std::thread recordingStatsThread;
     std::thread controlThread;
 
     // ------
     // Input
     // ------
+
+    bool isAudioDisabled;
 
     // Input context
     DeviceContext *mainDevice;
@@ -81,16 +89,16 @@ class RecordingServiceImpl {
 
     // recording_utils.cpp
     static std::map<std::string, std::string> get_device_options(
-            const std::string &deviceID,
-            RecordingConfig config);
+        const std::string &deviceID,
+        RecordingConfig config);
 
     static std::tuple<std::string, std::string> unpackDeviceAddress(
-            const std::string &deviceAddress);
+        const std::string &deviceAddress);
 
     static std::tuple<int, int, int, int, int, int> get_output_image_parameters(
-            int deviceInputWidth,
-            int deviceInputHeight,
-            const RecordingConfig &config);
+        int deviceInputWidth,
+        int deviceInputHeight,
+        const RecordingConfig &config);
 
     // recording_service.cpp
     void start_capture_loop(PacketCapturer *capturer);
@@ -98,7 +106,7 @@ class RecordingServiceImpl {
     void start_transcode_process(ProcessChain *transcodeChain);
 
 public:
-    explicit RecordingServiceImpl(const RecordingConfig& config);
+    explicit RecordingServiceImpl(const RecordingConfig &config);
 
     int start_recording();
 
@@ -108,12 +116,12 @@ public:
 
     int stop_recording();
 
-    void rec_stats_loop();
-
     void wait_recording();
 
+    RecordingStats get_recording_stats();
+
     ~RecordingServiceImpl() {
-        if (mainDevice != auxDevice) {
+        if (mainDevice != auxDevice && !isAudioDisabled) {
             delete auxDevice;
             delete auxDeviceCapturer;
         }
@@ -123,7 +131,9 @@ public:
         delete outputMuxer;
 
         delete videoTranscodeChain;
-        delete audioTranscodeChain;
+        if (!isAudioDisabled) {
+            delete audioTranscodeChain;
+        }
     };
 };
 

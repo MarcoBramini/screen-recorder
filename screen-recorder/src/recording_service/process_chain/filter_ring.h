@@ -13,11 +13,13 @@ class FilterChainRing {
     std::variant<FilterChainRing *, EncoderChainRing *> next;
 
 public:
-    virtual void execute(ProcessContext* processContext, AVFrame *inputFrame) = 0;
+    virtual void execute(ProcessContext *processContext, AVFrame *inputFrame) = 0;
 
     std::variant<FilterChainRing *, EncoderChainRing *> getNext() { return this->next; };
 
     void setNext(std::variant<FilterChainRing *, EncoderChainRing *> ring) { this->next = ring; };
+
+    virtual ~FilterChainRing() = default;
 };
 
 #endif //PDS_SCREEN_RECORDING_FILTER_RING_H

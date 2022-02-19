@@ -27,9 +27,11 @@ class ProcessChain {
 
     MuxerChainRing *muxerRing;
 
+    bool isMainProcess; // video processing chain is considered the main process, audio is optional
+
 public:
     ProcessChain(DecoderChainRing *decoderRing, std::vector<FilterChainRing *> filterRings,
-                 EncoderChainRing *encoderRing, MuxerChainRing *muxerRing);
+                 EncoderChainRing *encoderRing, MuxerChainRing *muxerRing, bool isMainProcess);
 
     void processNext();
 
@@ -42,16 +44,14 @@ public:
     ~ProcessChain() {
         delete decoderRing;
 
-        for (auto ring:filterRings) {
-            //delete ring;
+        for (auto ring: filterRings) {
+            delete ring;
         }
 
         delete encoderRing;
 
-        if (muxerRing) {
-            std::cout<<"test"<<std::endl;
-           // delete muxerRing;
-            std::cout << "test1" << std::endl;
+        if (isMainProcess) {
+            delete muxerRing;
         }
     };
 };

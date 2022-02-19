@@ -23,6 +23,7 @@ class BackEnd : public QObject
     Q_PROPERTY(QVariantMap selectedCaptureRegion READ getSelectedCaptureRegion WRITE setSelectedCaptureRegion NOTIFY selectedCaptureRegionChanged)
     Q_PROPERTY(QList<QString> framerates READ getFramerates CONSTANT)
     Q_PROPERTY(int selectedFramerateIndex READ getSelectedFramerateIndex WRITE setSelectedFramerateIndex NOTIFY selectedFramerateIndexChanged)
+    Q_PROPERTY(QString errorMessage READ getErrorMessage WRITE setErrorMessage NOTIFY errorMessageChanged)
 
     QML_ELEMENT
 
@@ -33,7 +34,7 @@ class BackEnd : public QObject
     int m_selectedVideoDeviceIndex;
     int m_selectedAudioDeviceIndex;
 
-    std::vector<std::tuple<int,int>> availableOutputResolutions;
+    std::vector<std::tuple<int,int,double>> availableOutputResolutions;
     int m_selectedOutputResolutionIndex;
 
     QVariantMap m_selectedCaptureRegion;
@@ -44,6 +45,8 @@ class BackEnd : public QObject
     RecordingConfig config;
     std::unique_ptr<RecordingService> rs;
 
+    QString m_errorMessage;
+
     void updateAvailableOutputResolutions();
 public:
     explicit BackEnd(QObject *parent = nullptr);
@@ -52,6 +55,8 @@ public:
     Q_INVOKABLE void stopRecording();
     Q_INVOKABLE void pauseRecording();
     Q_INVOKABLE void resumeRecording();
+    Q_INVOKABLE QVariantMap getRecordingStats();
+
     // ------
     // Config
     // ------
@@ -92,6 +97,13 @@ public:
 
     void setSelectedFramerateIndex(int index);
 
+    // -----
+    // Error
+    // -----
+    QString getErrorMessage();
+
+    void setErrorMessage(QString message);
+
 signals:
     void outputDirChanged();
     void selectedVideoDeviceIndexChanged();
@@ -99,6 +111,7 @@ signals:
     void selectedOutputResolutionIndexChanged();
     void selectedCaptureRegionChanged();
     void selectedFramerateIndexChanged();
+    void errorMessageChanged();
 };
 
 #endif // BACKEND_H
