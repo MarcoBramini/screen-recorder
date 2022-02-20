@@ -7,6 +7,7 @@
 #include <thread>
 #include <chrono>
 
+#include "error.h"
 #include "device_context.h"
 #include "process_chain/decoder_ring.h"
 #include "process_chain/encoder_ring.h"
@@ -84,12 +85,13 @@ void RecordingServiceImpl::start_transcode_process(ProcessChain &transcodeChain,
 
 /// Starts the recording process.
 /// It writes the output file header and starts all the needed sub processes.
-int RecordingServiceImpl::start_recording() {
-    // Write output file header
+void RecordingServiceImpl::start_recording() {
     int ret = avformat_write_header(outputMuxer->getContext(), nullptr);
     if (ret < 0) {
-        // Handle
-        return -1;
+        throw std::runtime_error(Error::build_error_message(__FUNCTION__, {},
+                                                            fmt::format(
+                                                                    "error writing the output file header ({})",
+                                                                    Error::unpackAVError(ret))));
     }
 
     recordingStatus = RECORDING;
@@ -126,12 +128,10 @@ int RecordingServiceImpl::start_recording() {
                     start_transcode_process(*audioTranscodeChain, audioProcessChainQueueMutex, audioProcessChainCV);
                 });
     }
-
-    return 0;
 }
 
 /// Pause the recording process
-int RecordingServiceImpl::pause_recording() {
+void RecordingServiceImpl::pause_recording() {
     // Set pauseTimestamp
     pauseTimestamp =
             duration_cast<microseconds>(system_clock::now().time_since_epoch())
@@ -142,12 +142,10 @@ int RecordingServiceImpl::pause_recording() {
         recordingStatus = PAUSE;
     }
     captureCV.notify_all();
-
-    return 0;
 }
 
 /// Resume the recording process
-int RecordingServiceImpl::resume_recording() {
+void RecordingServiceImpl::resume_recording() {
     // Increment pausedTime by resumeTimestamp - pauseTimestamp interval
     int64_t resumeTimestamp =
             duration_cast<microseconds>(system_clock::now().time_since_epoch())
@@ -163,16 +161,14 @@ int RecordingServiceImpl::resume_recording() {
         recordingStatus = RECORDING;
     }
     captureCV.notify_all();
-
-    return 0;
 }
 
 /// Stops the recording process
 /// Waits for the sub-processes to end. Remaining captured packets are flushed.
 /// Finally, it writes the output file trailer.
-int RecordingServiceImpl::stop_recording() {
+void RecordingServiceImpl::stop_recording() {
     if (recordingStatus == IDLE || recordingStatus == STOP)
-        return 0;
+        return;
 
     {
         std::lock_guard<std::mutex> lock(recordingStatusMutex);
@@ -198,12 +194,13 @@ int RecordingServiceImpl::stop_recording() {
         audioTranscodeChain->flush();
     }
 
-    if (av_write_trailer(outputMuxer->getContext()) < 0) {
-        std::cout << "write error" << std::endl;
-        return -1;
+    int ret = av_write_trailer(outputMuxer->getContext());
+    if (ret < 0) {
+        throw std::runtime_error(Error::build_error_message(__FUNCTION__, {},
+                                                            fmt::format(
+                                                                    "error writing the output file trailer ({})",
+                                                                    Error::unpackAVError(ret))));
     }
-
-    return 0;
 }
 
 /// Initializes all the structures needed for the recording process
@@ -397,8 +394,8 @@ RecordingServiceImpl::RecordingServiceImpl(const RecordingConfig &config) {
                     resume_recording();
                     std::cout << "Resumed" << std::endl;
                 } else if (c == 's') {
-                    int r = stop_recording();
-                    std::cout << "Stopped" << r << std::endl;
+                    stop_recording();
+                    std::cout << "Stopped" << std::endl;
                     break;
                 }
             }

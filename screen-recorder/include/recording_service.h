@@ -8,13 +8,13 @@ class RecordingService {
 public:
     explicit RecordingService(const RecordingConfig &config) : impl(std::make_unique<RecordingServiceImpl>(config)) {};
 
-    int start_recording() { return impl->start_recording(); };
+    void start_recording() { return impl->start_recording(); };
 
-    int pause_recording() { return impl->pause_recording(); };
+    void pause_recording() { return impl->pause_recording(); };
 
-    int resume_recording() { return impl->resume_recording(); };
+    void resume_recording() { return impl->resume_recording(); };
 
-    int stop_recording() { return impl->stop_recording(); };
+    void stop_recording() { return impl->stop_recording(); };
 
     void wait_recording() { return impl->wait_recording(); };
 

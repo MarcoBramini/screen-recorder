@@ -38,9 +38,10 @@ struct RecordingStats {
 };
 
 class RecordingServiceImpl {
-    // ------
-    // Status
-    // ------
+    // --------
+    // Internal
+    // --------
+
     RecordingStatus recordingStatus;
     int64_t startTimestamp; // microseconds
     int64_t pauseTimestamp;// microseconds
@@ -118,13 +119,13 @@ class RecordingServiceImpl {
 public:
     explicit RecordingServiceImpl(const RecordingConfig &config);
 
-    int start_recording();
+    void start_recording();
 
-    int pause_recording();
+    void pause_recording();
 
-    int resume_recording();
+    void resume_recording();
 
-    int stop_recording();
+    void stop_recording();
 
     void wait_recording();
 
