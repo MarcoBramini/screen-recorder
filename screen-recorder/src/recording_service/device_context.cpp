@@ -73,7 +73,7 @@ DeviceContext::init_input_device(const std::string &deviceID, const std::string 
     }
 
     // Find the input format associated to the deviceID
-    const AVInputFormat *inputFormat = av_find_input_format(deviceID.c_str());
+    auto inputFormat = av_find_input_format(deviceID.c_str());
     if (!inputFormat) {
         throw std::runtime_error(Error::build_error_message(__FUNCTION__, methodParams,
                                                             "no AVInputFormat found for deviceID"));

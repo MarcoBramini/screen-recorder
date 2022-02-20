@@ -7,6 +7,7 @@
 #include <queue>
 #include <string>
 #include <thread>
+#include <condition_variable>
 #include "recording_config.h"
 #include "device_context.h"
 #include "packet_capturer/packet_capturer.h"

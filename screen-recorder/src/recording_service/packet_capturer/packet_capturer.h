@@ -1,6 +1,8 @@
 #ifndef PDS_SCREEN_RECORDING_PACKET_CAPTURER_H
 #define PDS_SCREEN_RECORDING_PACKET_CAPTURER_H
 
+#include <functional>
+
 #include "../device_context.h"
 #include "../ffmpeg_objects_deleter.h"
 

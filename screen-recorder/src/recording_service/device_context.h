@@ -4,6 +4,7 @@
 #include <vector>
 #include <string>
 #include <map>
+#include <memory>
 #include "ffmpeg_objects_deleter.h"
 
 extern "C" {
