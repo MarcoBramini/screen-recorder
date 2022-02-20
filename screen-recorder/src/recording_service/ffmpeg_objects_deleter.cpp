@@ -40,7 +40,7 @@ void FFMpegObjectsDeleter::operator()(AVFilterGraph *avfg) {
 }
 
 void FFMpegObjectsDeleter::operator()(AVFilterContext *avfc) {
-    //avfilter_free(avfc);
+    avfilter_free(avfc);
 }
 
 void FFMpegObjectsDeleter::operator()(AVFilterInOut *avfio) {

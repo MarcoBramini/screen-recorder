@@ -26,19 +26,16 @@ class ProcessChain {
 
     std::shared_ptr<MuxerChainRing> muxerRing;
 
-    bool isMainProcess; // video processing chain is considered the main process, audio is optional
-
 public:
     ProcessChain(std::shared_ptr<DecoderChainRing> decoderRing,
                  std::vector<std::shared_ptr<FilterChainRing>> filterRings,
-                 std::shared_ptr<EncoderChainRing> encoderRing, std::shared_ptr<MuxerChainRing> muxerRing,
-                 bool isMainProcess);
+                 std::shared_ptr<EncoderChainRing> encoderRing, std::shared_ptr<MuxerChainRing> muxerRing);
 
     void processNext();
 
     void enqueueSourcePacket(std::unique_ptr<AVPacket, FFMpegObjectsDeleter>, int64_t pts);
 
-    bool isSourceQueueEmpty() { return this->sourceQueue.empty(); };
+    [[nodiscard]] bool isSourceQueueEmpty() const { return this->sourceQueue.empty(); };
 
     void flush();
 

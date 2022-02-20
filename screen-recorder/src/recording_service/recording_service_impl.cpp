@@ -18,45 +18,64 @@
 
 using namespace std::chrono;
 
-/// Handles a captured video packed, enqueueing it in the video transcoder packets queue.
+/// Handles a captured packed, enqueueing it in the transcoder packets queue.
 /// It is used as callback for the PacketCapturer objects.
-void on_video_packet_capture(std::unique_ptr<AVPacket, FFMpegObjectsDeleter> videoPacket,
-                             int64_t relativePts,
-                             ProcessChain &videoTranscodeChain) {
-    videoTranscodeChain.enqueueSourcePacket(std::move(videoPacket), relativePts);
-}
-
-/// Handles a captured audio packed, enqueueing it in the audio transcoder packets queue.
-/// It is used as callback for the PacketCapturer objects.
-void on_audio_packet_capture(std::unique_ptr<AVPacket, FFMpegObjectsDeleter> audioPacket,
-                             int64_t relativePts,
-                             ProcessChain &audioTranscodeChain) {
-    audioTranscodeChain.enqueueSourcePacket(std::move(audioPacket), relativePts);
+void on_packet_capture(std::unique_ptr<AVPacket, FFMpegObjectsDeleter> packet, int64_t relativePts,
+                       ProcessChain &transcodeChain, std::mutex &queueMutex,
+                       std::condition_variable &processChainCV) {
+    {
+        std::lock_guard<std::mutex> lk(queueMutex);
+        transcodeChain.enqueueSourcePacket(std::move(packet), relativePts);
+    }
+    processChainCV.notify_all();
 }
 
 /// Starts the packet capture loop.
 /// It temporarily stops if the recording process is paused.
 /// The loop exits when the recording proces is stopped.
 void RecordingServiceImpl::start_capture_loop(PacketCapturer &capturer) {
-    while (recordingStatus == RECORDING || recordingStatus == PAUSE) {
-        // TODO: use pause cond var
-        if (recordingStatus == PAUSE)
-            continue;
+    while (true) {
+        {
+            std::unique_lock<std::mutex> lock(recordingStatusMutex);
+            captureCV.wait(lock, [&] { return recordingStatus != PAUSE; });
+
+            if (recordingStatus == STOP)
+                break;
+        }
 
         capturer.capture_next();
+        capturer.sleep();
     }
 }
 
 /// Processes all the captured packets in the a/v transcoder packets queue.
 /// It temporarily stops if the queue is empty but the recording process is still active (e.g. paused).
 /// The loop exits when the queue is empty and the recording process is stopped.
-void RecordingServiceImpl::start_transcode_process(ProcessChain &transcodeChain) {
+void RecordingServiceImpl::start_transcode_process(ProcessChain &transcodeChain, std::mutex &queueMutex,
+                                                   std::condition_variable &queueCV) {
+    bool mustStop = false;
     while (true) {
-        // TODO: use cond var to handle empty queue
-        if (transcodeChain.isSourceQueueEmpty()) {
-            if (recordingStatus == RECORDING || recordingStatus == PAUSE)
+        // Check if the recording process has been stopped
+        {
+            std::lock_guard<std::mutex> lk(recordingStatusMutex);
+            mustStop = recordingStatus == STOP;
+        }
+
+        // Process the next packet until the queue is empty.
+        // If the queue is empty, wait for new packets but check every 100ms if the recording has been stopped.
+        {
+            std::unique_lock<std::mutex> lock(queueMutex);
+            queueCV.wait_for(lock,
+                             100ms,
+                             [&transcodeChain] {
+                                 return !transcodeChain.isSourceQueueEmpty();
+                             });
+
+            if (transcodeChain.isSourceQueueEmpty() && mustStop)
+                break;
+
+            if (transcodeChain.isSourceQueueEmpty())
                 continue;
-            break;
         }
 
         transcodeChain.processNext();
@@ -87,7 +106,7 @@ int RecordingServiceImpl::start_recording() {
 
     capturedVideoPacketsProcessThread =
             std::thread([this]() {
-                start_transcode_process(*videoTranscodeChain);
+                start_transcode_process(*videoTranscodeChain, videoProcessChainQueueMutex, videoProcessChainCV);
             });
 
     // ---------------
@@ -104,7 +123,7 @@ int RecordingServiceImpl::start_recording() {
 
         capturedAudioPacketsProcessThread =
                 std::thread([this]() {
-                    start_transcode_process(*audioTranscodeChain);
+                    start_transcode_process(*audioTranscodeChain, audioProcessChainQueueMutex, audioProcessChainCV);
                 });
     }
 
@@ -118,8 +137,11 @@ int RecordingServiceImpl::pause_recording() {
             duration_cast<microseconds>(system_clock::now().time_since_epoch())
                     .count();
 
-    // Set cond var isPaused to true
-    recordingStatus = PAUSE;
+    {
+        std::lock_guard<std::mutex> lk(recordingStatusMutex);
+        recordingStatus = PAUSE;
+    }
+    captureCV.notify_all();
 
     return 0;
 }
@@ -136,8 +158,12 @@ int RecordingServiceImpl::resume_recording() {
         auxDeviceCapturer->add_pause_duration(resumeTimestamp - pauseTimestamp);
     }
 
-    // Set cond var isPaused to false
-    recordingStatus = RECORDING;
+    {
+        std::lock_guard<std::mutex> lk(recordingStatusMutex);
+        recordingStatus = RECORDING;
+    }
+    captureCV.notify_all();
+
     return 0;
 }
 
@@ -148,7 +174,11 @@ int RecordingServiceImpl::stop_recording() {
     if (recordingStatus == IDLE || recordingStatus == STOP)
         return 0;
 
-    recordingStatus = STOP;
+    {
+        std::lock_guard<std::mutex> lock(recordingStatusMutex);
+        recordingStatus = STOP;
+    }
+
     stopTimestamp = duration_cast<microseconds>(system_clock::now().time_since_epoch()).count();
 
     if (mainDeviceCaptureThread.joinable())
@@ -285,7 +315,7 @@ RecordingServiceImpl::RecordingServiceImpl(const RecordingConfig &config) {
 
     // Init video transcode process chain
     this->videoTranscodeChain = std::make_unique<ProcessChain>(
-            videoDecoderRing, videoFilterRings, videoEncoderRing, muxerRing, true);
+            videoDecoderRing, videoFilterRings, videoEncoderRing, muxerRing);
 
     if (!isAudioDisabled) {
         // Init audio rings
@@ -324,18 +354,20 @@ RecordingServiceImpl::RecordingServiceImpl(const RecordingConfig &config) {
 
         // Init audio transcode process chain
         this->audioTranscodeChain = std::make_unique<ProcessChain>(
-                audioDecoderRing, audioFilterRings, audioEncoderRing, muxerRing, false);
+                audioDecoderRing, audioFilterRings, audioEncoderRing, muxerRing);
     }
 
     // Init packet capturers
     auto onVideoPacketCaptureCallback = [this](std::unique_ptr<AVPacket, FFMpegObjectsDeleter> videoPacket,
                                                int64_t relativePts) {
-        return on_video_packet_capture(std::move(videoPacket), relativePts, *videoTranscodeChain);
+        return on_packet_capture(std::move(videoPacket), relativePts, *videoTranscodeChain, videoProcessChainQueueMutex,
+                                 videoProcessChainCV);
     };
 
     auto onAudioPacketCaptureCallback = [this](std::unique_ptr<AVPacket, FFMpegObjectsDeleter> audioPacket,
                                                int64_t relativePts) {
-        return on_audio_packet_capture(std::move(audioPacket), relativePts, *audioTranscodeChain);
+        return on_packet_capture(std::move(audioPacket), relativePts, *audioTranscodeChain, audioProcessChainQueueMutex,
+                                 audioProcessChainCV);
     };
 
     mainDeviceCapturer = std::make_unique<PacketCapturer>(

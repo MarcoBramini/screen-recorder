@@ -17,12 +17,11 @@ void ProcessChain::processNext() {
 /// Initializes the process chain using the rings passed in input
 ProcessChain::ProcessChain(std::shared_ptr<DecoderChainRing> decoderRing,
                            std::vector<std::shared_ptr<FilterChainRing>> filterRings,
-                           std::shared_ptr<EncoderChainRing> encoderRing, std::shared_ptr<MuxerChainRing> muxerRing,
-                           bool isMainProcess) : decoderRing(std::move(decoderRing)),
-                                                 filterRings(std::move(filterRings)),
-                                                 encoderRing(std::move(encoderRing)),
-                                                 muxerRing(std::move(muxerRing)),
-                                                 isMainProcess(isMainProcess) {
+                           std::shared_ptr<EncoderChainRing> encoderRing, std::shared_ptr<MuxerChainRing> muxerRing)
+        : decoderRing(std::move(decoderRing)),
+          filterRings(std::move(filterRings)),
+          encoderRing(std::move(encoderRing)),
+          muxerRing(std::move(muxerRing)) {
     if (this->filterRings.empty()) {
         this->decoderRing->setNext(this->encoderRing);
     } else {

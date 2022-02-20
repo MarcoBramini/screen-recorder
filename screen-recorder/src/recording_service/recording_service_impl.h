@@ -46,6 +46,14 @@ class RecordingServiceImpl {
     int64_t pauseTimestamp;// microseconds
     int64_t stopTimestamp;// microseconds
 
+    std::condition_variable captureCV;
+    std::mutex recordingStatusMutex;
+
+    std::mutex videoProcessChainQueueMutex;
+    std::condition_variable videoProcessChainCV;
+    std::mutex audioProcessChainQueueMutex;
+    std::condition_variable audioProcessChainCV;
+
     // -------
     // Threads
     // -------
@@ -91,21 +99,21 @@ class RecordingServiceImpl {
 
     // recording_utils.cpp
     static std::map<std::string, std::string> get_device_options(
-        const std::string &deviceID,
-        const RecordingConfig& config);
+            const std::string &deviceID,
+            const RecordingConfig &config);
 
     static std::tuple<std::string, std::string> unpackDeviceAddress(
-        const std::string &deviceAddress);
+            const std::string &deviceAddress);
 
     static std::tuple<int, int, int, int, int, int> get_output_image_parameters(
-        int deviceInputWidth,
-        int deviceInputHeight,
-        const RecordingConfig &config);
+            int deviceInputWidth,
+            int deviceInputHeight,
+            const RecordingConfig &config);
 
     // recording_service.cpp
     void start_capture_loop(PacketCapturer &capturer);
 
-    void start_transcode_process(ProcessChain &transcodeChain);
+    void start_transcode_process(ProcessChain &transcodeChain, std::mutex& queueMutex, std::condition_variable& queueCV);
 
 public:
     explicit RecordingServiceImpl(const RecordingConfig &config);

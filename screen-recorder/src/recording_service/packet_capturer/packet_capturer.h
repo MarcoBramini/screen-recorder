@@ -10,12 +10,14 @@ extern "C" {
 }
 
 typedef std::function<void(std::unique_ptr<AVPacket, FFMpegObjectsDeleter> packet, int64_t relativePts)>
-        CapturedPacketHandler;
+CapturedPacketHandler;
 
 class PacketCapturer {
     std::shared_ptr<DeviceContext> inputDevice;
 
     int64_t totalPauseDuration = 0;
+
+    int minFramePeriod; // Interval in milliseconds between two packets in the stream with the highest framerate (samplerate)
 
     CapturedPacketHandler onVideoPacketCapture;
     CapturedPacketHandler onAudioPacketCapture;
@@ -34,6 +36,8 @@ public:
     void add_pause_duration(int64_t pauseDuration);
 
     [[nodiscard]] int64_t get_pause_duration() const;
+
+    void sleep();
 
     ~PacketCapturer() = default;
 };
