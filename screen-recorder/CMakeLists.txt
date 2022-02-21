@@ -3,6 +3,8 @@ project(screen_recorder)
 
 set(CMAKE_CXX_STANDARD 20)
 set(THREADS_PREFER_PTHREAD_FLAG ON)
+set(CMAKE_CXX_FLAGS "-fPIC")
+set(CMAKE_C_FLAGS "-fPIC")
 
 # PACKAGES
 find_package(Threads REQUIRED)

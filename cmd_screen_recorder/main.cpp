@@ -15,6 +15,12 @@ int main() {
   std::vector<InputDeviceAudio> audioDevices =
       DeviceService::get_input_audio_devices();
 
+    RecordingConfig config;
+    config.setUseControlThread(true);
+    config.setOutputDir(".");
+    config.setFramerate(30);
+    //config.setCaptureRegion(100,100,300,300);
+
   std::cout << "Video devices:" << std::endl;
   int i;
   for (i = 0; i < videoDevices.size(); i++) {
@@ -32,23 +38,11 @@ int main() {
   std::cout << "Insert the index of the audio device:" << std::endl;
   scanf("%d", &audioDeviceID);
 
-  std::string videoAddress =
-      fmt::format("{}:{}", videoDevices[videoDeviceID].getDeviceID(),
-                  videoDevices[videoDeviceID].getURL());
-  std::string audioAddress =
-      fmt::format("{}:{}", audioDevices[audioDeviceID].getDeviceID(),
-                  audioDevices[audioDeviceID].getURL());
+  config.setVideoAddress(videoDevices[videoDeviceID].getDeviceAddress());
+  config.setAudioAddress(audioDevices[audioDeviceID].getDeviceAddress());
 
   // Start recording
-  std::tuple<int, int, int, int> cropWindow = {0, 0, 5000, 2000};
-  RecordingService rs = RecordingService({
-      .videoAddress = videoAddress,
-      .audioAddress = audioAddress,
-      .outputFilename = "output.mp4",
-      .rescaleValue = 3,
-      .framerate = 30,
-      //.cropWindow = cropWindow,
-  });
+  RecordingService rs = RecordingService(config);
   rs.start_recording();
 
   rs.wait_recording();

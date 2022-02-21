@@ -4,7 +4,7 @@
 /// Returns the default options associated to an input device.
 std::map<std::string, std::string> RecordingServiceImpl::get_device_options(
         const std::string &deviceID,
-        const RecordingConfig& config) {
+        const RecordingConfig &config) {
     if (deviceID == "avfoundation") {
         return {{"pixel_format",   "uyvy422"},
                 {"framerate",      std::to_string(config.getFramerate())},
@@ -12,8 +12,7 @@ std::map<std::string, std::string> RecordingServiceImpl::get_device_options(
     }
 
     if (deviceID == "x11grab") {
-        return {{"framerate",  std::to_string(config.getFramerate())},
-                {"video_size", "1680x900"}};
+        return {{"framerate", std::to_string(config.getFramerate())}};
     }
 
     if (deviceID == "pulse") {
@@ -42,13 +41,14 @@ inline int make_even(int n) {
 /// Calculates the parameters of the output image.
 /// Returns:
 /// - encoderOutputWidth, encoderOutputHeight: the real output image resolution
-/// - scalerOutputWidth, scalerOutputHeight: the intermediate image resolution (same as the encoder resolution for fullscreen recording)
+/// - scalerOutputWidth, scalerOutputHeight: the intermediate image resolution
+/// (same as the encoder resolution for fullscreen recording)
 /// - cropOriginX, cropOriginY: origin of the image (0 for fullscreen recording)
-std::tuple<int, int, int, int, int, int> RecordingServiceImpl::get_output_image_parameters(
+std::tuple<int, int, int, int, int, int>
+RecordingServiceImpl::get_output_image_parameters(
         int deviceInputWidth,
         int deviceInputHeight,
         const RecordingConfig &config) {
-
     int encoderOutputWidth = deviceInputWidth;
     int encoderOutputHeight = deviceInputHeight;
     int scalerOutputWidth = encoderOutputWidth;
@@ -75,8 +75,8 @@ std::tuple<int, int, int, int, int, int> RecordingServiceImpl::get_output_image_
         encoderOutputHeight = make_even((int) (height * scalingFactor));
         cropOriginX = make_even((int) (x * scalingFactor));
         cropOriginY = make_even((int) (y * scalingFactor));
-
     }
 
-    return {encoderOutputWidth, encoderOutputHeight, scalerOutputWidth, scalerOutputHeight, cropOriginX, cropOriginY};
+    return {encoderOutputWidth, encoderOutputHeight, scalerOutputWidth,
+            scalerOutputHeight, cropOriginX, cropOriginY};
 }
