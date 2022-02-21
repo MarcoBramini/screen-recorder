@@ -28,7 +28,8 @@ void FFMpegObjectsDeleter::operator()(AVAudioFifo *avaf) {
 }
 
 void FFMpegObjectsDeleter::operator()(uint8_t ***d) {
-    av_freep(d); // TODO: check this
+    av_freep(d[0]);
+    av_freep(d);
 }
 
 void FFMpegObjectsDeleter::operator()(SwsContext *swsc) {
@@ -37,10 +38,6 @@ void FFMpegObjectsDeleter::operator()(SwsContext *swsc) {
 
 void FFMpegObjectsDeleter::operator()(AVFilterGraph *avfg) {
     avfilter_graph_free(&avfg);
-}
-
-void FFMpegObjectsDeleter::operator()(AVFilterContext *avfc) {
-    avfilter_free(avfc);
 }
 
 void FFMpegObjectsDeleter::operator()(AVFilterInOut *avfio) {

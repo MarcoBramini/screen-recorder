@@ -30,8 +30,8 @@ VFCropFilterRing::VFCropFilterRing(VFCropConfig config) : config(config) {
              config.inputTimeBase.num, config.inputTimeBase.den,
              config.inputAspectRatio.num, config.inputAspectRatio.den);
 
-    AVFilterContext *bufferSrcCtxTemp = nullptr;
-    ret = avfilter_graph_create_filter(&bufferSrcCtxTemp, bufferSrc, "in", args,
+    bufferSrcCtx = nullptr;
+    ret = avfilter_graph_create_filter(&bufferSrcCtx, bufferSrc, "in", args,
                                        nullptr, filterGraph.get());
     if (ret < 0) {
         throw std::runtime_error(Error::build_error_message(
@@ -40,11 +40,9 @@ VFCropFilterRing::VFCropFilterRing(VFCropConfig config) : config(config) {
                             Error::unpackAVError(ret))));
     }
 
-    bufferSrcCtx = std::unique_ptr<AVFilterContext, FFMpegObjectsDeleter>(bufferSrcCtxTemp);
-
     // Init the buffer video sink: filter chain termination, emits the converted frames.
-    AVFilterContext *bufferSinkCtxTemp = nullptr;
-    ret = avfilter_graph_create_filter(&bufferSinkCtxTemp, bufferSink, "out", nullptr,
+    bufferSinkCtx = nullptr;
+    ret = avfilter_graph_create_filter(&bufferSinkCtx, bufferSink, "out", nullptr,
                                        nullptr, filterGraph.get());
     if (ret < 0) {
         throw std::runtime_error(Error::build_error_message(
@@ -52,10 +50,9 @@ VFCropFilterRing::VFCropFilterRing(VFCropConfig config) : config(config) {
                 fmt::format("error creating buffer sink ({})",
                             Error::unpackAVError(ret))));
     }
-    bufferSinkCtx = std::unique_ptr<AVFilterContext, FFMpegObjectsDeleter>(bufferSinkCtxTemp);
 
     enum AVPixelFormat pix_fmts[] = {config.outputPixelFormat, AV_PIX_FMT_NONE};
-    ret = av_opt_set_int_list(bufferSinkCtx.get(), "pix_fmts", pix_fmts,
+    ret = av_opt_set_int_list(bufferSinkCtx, "pix_fmts", pix_fmts,
                               AV_PIX_FMT_NONE, AV_OPT_SEARCH_CHILDREN);
     if (ret < 0) {
         throw std::runtime_error(Error::build_error_message(
@@ -76,7 +73,7 @@ VFCropFilterRing::VFCropFilterRing(VFCropConfig config) : config(config) {
      * default.
      */
     outputs->name = av_strdup("in");
-    outputs->filter_ctx = bufferSrcCtx.get();
+    outputs->filter_ctx = bufferSrcCtx;
     outputs->pad_idx = 0;
     outputs->next = nullptr;
 
@@ -87,7 +84,7 @@ VFCropFilterRing::VFCropFilterRing(VFCropConfig config) : config(config) {
      * default.
      */
     inputs->name = av_strdup("out");
-    inputs->filter_ctx = bufferSinkCtx.get();
+    inputs->filter_ctx = bufferSinkCtx;
     inputs->pad_idx = 0;
     inputs->next = nullptr;
 
@@ -117,7 +114,7 @@ void VFCropFilterRing::execute(ProcessContext *processContext, AVFrame *inputFra
     }
 
     // Send the input frame to the filtergraph
-    ret = av_buffersrc_add_frame_flags(bufferSrcCtx.get(), inputFrame,
+    ret = av_buffersrc_add_frame_flags(bufferSrcCtx, inputFrame,
                                        AV_BUFFERSRC_FLAG_KEEP_REF);
     if (ret < 0) {
         throw std::runtime_error(Error::build_error_message(__FUNCTION__, {},
@@ -128,7 +125,7 @@ void VFCropFilterRing::execute(ProcessContext *processContext, AVFrame *inputFra
 
     // Read the converted frames from the filtergraph
     while (true) {
-        ret = av_buffersink_get_frame(bufferSinkCtx.get(), convertedFrame.get());
+        ret = av_buffersink_get_frame(bufferSinkCtx, convertedFrame.get());
         if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
             break;
         if (ret < 0)

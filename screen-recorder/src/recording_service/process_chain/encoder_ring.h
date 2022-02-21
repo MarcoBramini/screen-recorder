@@ -30,6 +30,7 @@ struct EncoderConfig {
 };
 
 class EncoderChainRing {
+    // These are just convenience pointers to the context main A/V streams. They follow the context lifecycle.
     AVStream *inputStream;
     AVStream *outputStream;
 

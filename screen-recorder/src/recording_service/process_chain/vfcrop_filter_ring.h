@@ -29,9 +29,10 @@ struct VFCropConfig {
 class VFCropFilterRing : public FilterChainRing {
     VFCropConfig config;
 
-     std::unique_ptr<AVFilterContext,FFMpegObjectsDeleter> bufferSinkCtx;
-     std::unique_ptr<AVFilterContext,FFMpegObjectsDeleter> bufferSrcCtx;
-    std::unique_ptr<AVFilterGraph,FFMpegObjectsDeleter> filterGraph;
+    std::unique_ptr<AVFilterGraph, FFMpegObjectsDeleter> filterGraph;
+    // These are just convenience pointers to filter graph's filters contexts. They follow the filter graph lifecycle.
+    AVFilterContext *bufferSinkCtx;
+    AVFilterContext *bufferSrcCtx;
 
 public:
     explicit VFCropFilterRing(VFCropConfig config);

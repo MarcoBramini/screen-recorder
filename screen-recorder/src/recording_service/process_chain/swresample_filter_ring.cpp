@@ -73,15 +73,15 @@ void SWResampleFilterRing::execute(ProcessContext *processContext, AVFrame *inpu
                                                        Error::unpackAVError(ret))));
     }
 
-    auto convertedFrame = std::unique_ptr<AVFrame, FFMpegObjectsDeleter>(av_frame_alloc());
-    if (!convertedFrame) {
-        throw std::runtime_error(
-                Error::build_error_message(__FUNCTION__, {}, "error allocating a new frame"));
-    }
-
     int64_t framePts = processContext->sourcePacketPts;
     int64_t frameOffset = 0;
     while (av_audio_fifo_size(outputBuffer.get()) >= config.outputFrameSize) {
+        auto convertedFrame = std::unique_ptr<AVFrame, FFMpegObjectsDeleter>(av_frame_alloc());
+        if (!convertedFrame) {
+            throw std::runtime_error(
+                    Error::build_error_message(__FUNCTION__, {}, "error allocating a new frame"));
+        }
+
         // Build frame from buffer
         convertedFrame->nb_samples = config.outputFrameSize;
         convertedFrame->channels = config.outputChannels;

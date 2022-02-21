@@ -33,8 +33,6 @@ public:
 
     void operator()(AVFilterGraph *avfg);
 
-    void operator()(AVFilterContext *avfc);
-
     void operator()(AVFilterInOut *avfio);
 };
 
