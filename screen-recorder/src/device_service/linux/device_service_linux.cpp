@@ -36,11 +36,14 @@ std::vector<InputDeviceVideo> DeviceService::get_input_video_devices() {
         int width = xMonitors[monitorIdx].width;
         int height = xMonitors[monitorIdx].height;
         int primary = xMonitors[monitorIdx].primary;
-        std::string port = XGetAtomName(display, xMonitors[monitorIdx].name);
+        char *port = XGetAtomName(display, xMonitors[monitorIdx].name);
         InputDeviceVideo deviceVideo(id, DEVICE_ID_X11GRAB, name, static_cast<float>(x), static_cast<float>(y),
-                                     static_cast<float>(width), static_cast<float>(height), primary, port);
+                                     static_cast<float>(width), static_cast<float>(height), primary, std::string(port));
         devices.push_back(deviceVideo);
+        XFree(port);
     }
+
+    XRRFreeMonitors(xMonitors);
     return devices;
 }
 
