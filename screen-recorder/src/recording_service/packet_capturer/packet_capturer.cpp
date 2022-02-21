@@ -6,15 +6,15 @@
 PacketCapturer::PacketCapturer(std::shared_ptr<DeviceContext> inputDevice,
                                CapturedPacketHandler onVideoPacketCapture,
                                CapturedPacketHandler onAudioPacketCapture)
-    : inputDevice(std::move(inputDevice)),
-      onVideoPacketCapture(std::move(onVideoPacketCapture)),
-      onAudioPacketCapture(std::move(onAudioPacketCapture)), totalPauseDuration(0) {
+        : inputDevice(std::move(inputDevice)),
+          onVideoPacketCapture(std::move(onVideoPacketCapture)),
+          onAudioPacketCapture(std::move(onAudioPacketCapture)), totalPauseDuration(0) {
     int videoFramePeriod = std::numeric_limits<int>::max(), audioFramePeriod = std::numeric_limits<int>::max();
     AVStream * videoStream =  this->inputDevice->getVideoStream();
     AVStream *audioStream = this->inputDevice->getAudioStream();
 
-    if(videoStream) videoFramePeriod = (int)(1000000/videoStream->r_frame_rate.num);
-    if(audioStream) audioFramePeriod = (int)(1000000/audioStream->codecpar->sample_rate);
+    if(videoStream) videoFramePeriod = (int)(videoStream->time_base.den/av_q2d(videoStream->r_frame_rate));
+    if(audioStream) audioFramePeriod = (int)(audioStream->time_base.den/audioStream->codecpar->sample_rate);
 
     minFramePeriod = std::min(videoFramePeriod,audioFramePeriod);
 }
@@ -32,8 +32,8 @@ void PacketCapturer::handle_captured_video_packet(AVPacket *inputVideoPacket) {
     auto videoPacket = av_packet_clone(inputVideoPacket);
 
     int64_t packetPts = calculate_packet_pts(
-                            inputVideoPacket->pts, inputDevice->getVideoStream()->start_time,
-                            totalPauseDuration);
+            inputVideoPacket->pts, inputDevice->getVideoStream()->start_time,
+            totalPauseDuration);
     //onVideoPacketCapture(videoPacket, packetPts);
 
 }
@@ -44,8 +44,8 @@ void PacketCapturer::handle_captured_audio_packet(AVPacket *inputAudioPacket) {
     auto audioPacket = av_packet_clone(inputAudioPacket);
 
     int64_t packetPts = calculate_packet_pts(
-                            inputAudioPacket->pts, inputDevice->getAudioStream()->start_time,
-                            totalPauseDuration);
+            inputAudioPacket->pts, inputDevice->getAudioStream()->start_time,
+            totalPauseDuration);
     //onAudioPacketCapture(audioPacket, packetPts);
 
 }
@@ -61,33 +61,33 @@ void PacketCapturer::capture_next() {
 
     if (ret < 0) {
         throw std::runtime_error(
-            Error::build_error_message(__FUNCTION__, {},
-                                       fmt::format("error reading frames from the input device ({})",
-                                               Error::unpackAVError(ret))));
+                Error::build_error_message(__FUNCTION__, {},
+                                           fmt::format("error reading frames from the input device ({})",
+                                                       Error::unpackAVError(ret))));
     }
 
     AVMediaType packetType = inputDevice->getContext()
-                             ->streams[inputPacket->stream_index]
-                             ->codecpar->codec_type;
+            ->streams[inputPacket->stream_index]
+            ->codecpar->codec_type;
 
     int64_t packetPts;
     switch (packetType) {
-    case AVMEDIA_TYPE_VIDEO:
-        //auto videoPacket = av_packet_clone(inputVideoPacket);
-        packetPts = calculate_packet_pts(inputPacket->pts, inputDevice->getVideoStream()->start_time,
-                                         totalPauseDuration);
+        case AVMEDIA_TYPE_VIDEO:
+            //auto videoPacket = av_packet_clone(inputVideoPacket);
+            packetPts = calculate_packet_pts(inputPacket->pts, inputDevice->getVideoStream()->start_time,
+                                             totalPauseDuration);
 
-        onVideoPacketCapture(std::move(inputPacket), packetPts);
-        break;
-    case AVMEDIA_TYPE_AUDIO:
-        packetPts = calculate_packet_pts(inputPacket->pts, inputDevice->getAudioStream()->start_time,
-                                         totalPauseDuration);
+            onVideoPacketCapture(std::move(inputPacket), packetPts);
+            break;
+        case AVMEDIA_TYPE_AUDIO:
+            packetPts = calculate_packet_pts(inputPacket->pts, inputDevice->getAudioStream()->start_time,
+                                             totalPauseDuration);
 
-        onAudioPacketCapture(std::move(inputPacket), packetPts);
-        break;
-    default:
-        throw std::runtime_error(Error::build_error_message(
-                                     __FUNCTION__, {}, fmt::format("unexpected packet type ({})", std::to_string(packetType))));
+            onAudioPacketCapture(std::move(inputPacket), packetPts);
+            break;
+        default:
+            throw std::runtime_error(Error::build_error_message(
+                    __FUNCTION__, {}, fmt::format("unexpected packet type ({})", std::to_string(packetType))));
     }
 }
 
