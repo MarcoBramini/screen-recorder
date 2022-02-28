@@ -47,3 +47,20 @@ cd build
 cmake -DCMAKE_BUILD_TYPE=Release ..
 cmake .  
 ```
+
+## Windows
+
+1. Install dependencies
+
+```
+cd \
+git clone https://github.com/Microsoft/vcpkg.git
+	cd vcpkg
+.\bootstrap-vcpkg.bat
+.\vcpkg integrate install
+.\vcpkg install ffmpeg:x64-windows
+.\vcpkg install fmt:x64-windows
+.\vcpkg install qt:x64-windows
+```
+
+"-DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake"

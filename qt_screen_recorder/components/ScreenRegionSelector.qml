@@ -8,7 +8,7 @@ Window {
     width: Screen.width
     height: Screen.height
     color: "#00000000"
-    flags: Qt.FramelessWindowHint | Qt.Popup
+    flags: Qt.ToolTip | Qt.FramelessWindowHint | Qt.NoDropShadowWindowHint | Qt.WindowStaysOnTopHint
 
     onVisibilityChanged: {
         if (window.visible) {
