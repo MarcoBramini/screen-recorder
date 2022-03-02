@@ -1,14 +1,14 @@
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QQuickStyle>
-#include "backend/backend.h"
+#include "src/backend.h"
 
 int main(int argc, char* argv[]) {
   QGuiApplication app(argc, argv);
 
   QQuickStyle::setStyle("Material");
 
-  qmlRegisterType<BackEnd>("backend", 1, 0, "Backend");
+  qmlRegisterType<BackEnd>("Backend", 1, 0, "BackEnd");
 
   QQmlApplicationEngine engine;
   const QUrl url(u"qrc:/main.qml"_qs);

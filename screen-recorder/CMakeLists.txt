@@ -24,6 +24,7 @@ pkg_check_modules(LIBAV REQUIRED IMPORTED_TARGET
 set(SOURCES
         src/device_service/input_device.cpp
         src/device_service/input_device.h
+        src/device_service/permission_status.h
         src/recording_service/recording_service_impl.cpp
         src/recording_service/recording_service_impl.h
         src/recording_service/recording_config.cpp
@@ -54,17 +55,17 @@ set(SOURCES
         src/recording_service/ffmpeg_objects_deleter.cpp
         src/recording_service/ffmpeg_objects_deleter.h
         )
-if (${APPLE})
+if (APPLE)
     set(SOURCES
             ${SOURCES}
             src/device_service/macos/avfoundation_bridge.mm
             src/device_service/macos/avfoundation_bridge.h
             src/device_service/macos/device_service_macos.cpp)
-elseif (${UNIX})
+elseif (UNIX)
     set(SOURCES
             ${SOURCES}
             src/device_service/linux/device_service_linux.cpp)
-elseif (${WIN32})
+elseif (WIN32)
     set(SOURCES
             ${SOURCES}
             src/device_service/windows/device_service_windows.cpp)
@@ -78,9 +79,9 @@ target_include_directories(screen_recorder INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}
 # LINK DEPENDENCIES
 target_link_libraries(screen_recorder PUBLIC PkgConfig::LIBAV)
 target_link_libraries(screen_recorder PUBLIC fmt::fmt)
-target_link_libraries(screen_recorder PUBLIC pthread)
+target_link_libraries(screen_recorder PUBLIC Threads::Threads)
 
-if (${APPLE})
+if (APPLE)
     target_link_libraries(screen_recorder PUBLIC
             "-framework AVFoundation"
             "-framework CoreGraphics"
@@ -89,7 +90,7 @@ if (${APPLE})
             "-framework MediaPlayer"
             "-framework QuartzCore"
             )
-elseif (${UNIX})
+elseif (UNIX)
     target_link_libraries(screen_recorder PUBLIC X11)
     target_link_libraries(screen_recorder PUBLIC Xrandr)
 endif ()

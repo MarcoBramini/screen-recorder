@@ -24,6 +24,7 @@ class BackEnd : public QObject
     Q_PROPERTY(QList<QString> framerates READ getFramerates CONSTANT)
     Q_PROPERTY(int selectedFramerateIndex READ getSelectedFramerateIndex WRITE setSelectedFramerateIndex NOTIFY selectedFramerateIndexChanged)
     Q_PROPERTY(QString errorMessage READ getErrorMessage WRITE setErrorMessage NOTIFY errorMessageChanged)
+    Q_PROPERTY(QVariantMap permissionsStatus READ getPermissionsStatus NOTIFY permissionsStatusChanged)
 
     QML_ELEMENT
 
@@ -47,6 +48,8 @@ class BackEnd : public QObject
 
     QString m_errorMessage;
 
+    PermissionsStatus permissionsStatus;
+
     void updateAvailableOutputResolutions();
 public:
     explicit BackEnd(QObject *parent = nullptr);
@@ -56,6 +59,8 @@ public:
     Q_INVOKABLE void pauseRecording();
     Q_INVOKABLE void resumeRecording();
     Q_INVOKABLE QVariantMap getRecordingStats();
+
+    Q_INVOKABLE void restartApp();
 
     // ------
     // Config
@@ -104,6 +109,23 @@ public:
 
     void setErrorMessage(QString message);
 
+    // ----------------
+    // PermissionStatus
+    // ----------------
+    Q_INVOKABLE bool showPermissionsSetup();
+
+    QVariantMap getPermissionsStatus();
+
+    void setCameraCapturePermissionStatus(bool isGranted);
+
+    void setMicrophoneCapturePermissionStatus(bool isGranted);
+
+    void setScreenCapturePermissionStatus(bool isGranted);
+
+    Q_INVOKABLE void setupCameraUsagePermission();
+    Q_INVOKABLE void setupMicrophoneUsagePermission();
+    Q_INVOKABLE void setupScreenCapturePermission();
+
 signals:
     void outputDirChanged();
     void selectedVideoDeviceIndexChanged();
@@ -112,6 +134,7 @@ signals:
     void selectedCaptureRegionChanged();
     void selectedFramerateIndexChanged();
     void errorMessageChanged();
+    void permissionsStatusChanged();
 };
 
 #endif // BACKEND_H

@@ -55,23 +55,20 @@ int check_microphone_capture_permissions() {
     }
 }
 
-void request_camera_capture_permissions() {
+void request_camera_capture_permissions(std::function<void(bool)> onComplete) {
     [AVCaptureDevice requestAccessForMediaType:AVMediaTypeVideo completionHandler:^(BOOL granted) {
-                        if (granted) {
-                            std::cout<<"wow"<<std::endl;
-                        }
+                        onComplete(granted);
                     }];
 }
-void request_microphone_capture_permissions() {
+void request_microphone_capture_permissions(std::function<void(bool)> onComplete) {
     [AVCaptureDevice requestAccessForMediaType:AVMediaTypeAudio completionHandler:^(BOOL granted) {
-                        if (granted) {
-                            std::cout<<"wow"<<std::endl;
-                        }
+                        onComplete(granted);
                     }];
 }
 
-void request_screen_capture_permissions() {
+void request_screen_capture_permissions(std::function<void(bool)> onComplete) {
     CGRequestScreenCaptureAccess();
+    onComplete(true);
 }
 
 int avfoundation_list_video_devices(std::vector<InputDeviceVideo> *devices) {

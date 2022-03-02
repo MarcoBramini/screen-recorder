@@ -16,6 +16,15 @@ Window {
     title: "QtScreenRecorder"
 
     BackEnd {
+        Component.onCompleted: function () {
+            if (backend.showPermissionsSetup()) {
+                permissionsSetupPanel.visible = true
+                permissionsSetupPanel.permissionsStatus = backend.permissionsStatus
+                return
+            }
+            controlPanel.visible = true
+        }
+
         id: backend
         onErrorMessageChanged: {
             if (backend.errorMessage) {
@@ -24,23 +33,20 @@ Window {
             }
         }
 
-
-        /*onIsReadyChanged: {
-            if (backend.isReady) {
-                controlPanel.state = "ready"
-            }
-        }*/
+        onPermissionsStatusChanged: {
+            permissionsSetupPanel.permissionsStatus = backend.permissionsStatus
+        }
     }
 
+    PermissionsSetupPanel {
+        id: permissionsSetupPanel
+        visible: false
+    }
 
-    /*onVisibleChanged: {
-        if (!backend.isReady) {
-            backend.init()
-        }
-    }*/
     ControlPanel {
         id: controlPanel
         state: "ready"
+        visible: false
     }
 
     ErrorDialog {
