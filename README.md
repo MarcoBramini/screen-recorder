@@ -1,6 +1,8 @@
-# pds-screen-recording
+# Screen Recorder
 
-An app to capture and record your screen
+A library to capture and record from your audio and video devices.
+
+Contains the main library and two example applications (command line and graphic interface).
 
 # Build
 
