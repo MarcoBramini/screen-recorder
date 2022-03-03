@@ -55,7 +55,7 @@ Window {
 
         Connections {
             target: allowCameraUsageButton
-            onClicked: {
+            function onClicked() {
                 backend.setupCameraUsagePermission()
             }
         }
@@ -105,7 +105,7 @@ Window {
         display: AbstractButton.TextBesideIcon
         Connections {
             target: allowMicrophoneUsageButton
-            onClicked: {
+            function onClicked() {
                 backend.setupMicrophoneUsagePermission()
             }
         }
@@ -155,7 +155,7 @@ Window {
         display: AbstractButton.TextBesideIcon
         Connections {
             target: allowScreenCaptureButton
-            onClicked: {
+            function onClicked() {
                 backend.setupScreenCapturePermission()
             }
         }
@@ -194,7 +194,7 @@ Window {
 
         Connections {
             target: restartButton
-            onClicked: {
+            function onClicked() {
                 backend.restartApp()
             }
         }
@@ -210,7 +210,7 @@ Window {
 
         Connections {
             target: exitButton
-            onClicked: {
+            function onClicked() {
                 Qt.quit()
             }
         }

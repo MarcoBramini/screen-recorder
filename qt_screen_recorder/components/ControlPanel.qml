@@ -45,8 +45,9 @@ Rectangle {
         }
     }
 
-    Row {
+    Rectangle {
         id: row
+        color: "#00000000"
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: parent.top
@@ -79,7 +80,7 @@ Rectangle {
 
             Connections {
                 target: recButton
-                onClicked: {
+                function onClicked() {
                     controlPanel.state = "recording"
                     backend.startRecording()
                 }
@@ -142,7 +143,7 @@ Rectangle {
 
             Connections {
                 target: pauseButton
-                onClicked: {
+                function onClicked() {
                     if (controlPanel.state === "recording") {
                         controlPanel.state = "paused"
                         backend.pauseRecording()
@@ -178,7 +179,7 @@ Rectangle {
 
             Connections {
                 target: stopButton
-                onClicked: {
+                function onClicked() {
                     recButtonLabel.text = "00:00:00"
                     controlPanel.state = "ready"
                     busyIndicator.visible = true
@@ -214,7 +215,7 @@ Rectangle {
 
             Connections {
                 target: configButton
-                onClicked: {
+                function onClicked() {
                     (configPanel.visible) ? configPanel.hide(
                                                 ) : configPanel.show()
                     controlPanel.state = (controlPanel.state === "config") ? "ready" : "config"
@@ -240,7 +241,7 @@ Rectangle {
             }
             Connections {
                 target: quitButton
-                onClicked: {
+                function onClicked() {
                     main_window.close()
                 }
             }

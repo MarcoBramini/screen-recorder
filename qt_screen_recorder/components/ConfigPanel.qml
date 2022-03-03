@@ -25,15 +25,17 @@ Window {
         border.width: 0
         layer.enabled: false
 
-        Column {
+        Rectangle {
             id: column
+            color: "#00000000"
             anchors.fill: parent
             anchors.rightMargin: 16
             anchors.leftMargin: 16
 
-            Row {
+            Rectangle {
                 id: row
                 height: 61
+                color: "#00000000"
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.top: parent.top
@@ -68,7 +70,7 @@ Window {
 
                     Connections {
                         target: outputDirButton
-                        onClicked: {
+                        function onClicked() {
                             folderDialog.visible = true
                         }
                     }
@@ -83,9 +85,10 @@ Window {
                 }
             }
 
-            Row {
+            Rectangle {
                 id: row1
                 height: 61
+                color: "#00000000"
                 visible: true
                 anchors.left: parent.left
                 anchors.right: parent.right
@@ -112,9 +115,10 @@ Window {
                 anchors.topMargin: 16
             }
 
-            Row {
+            Rectangle {
                 id: row2
                 height: 61
+                color: "#00000000"
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.top: row1.bottom
@@ -140,9 +144,10 @@ Window {
                 anchors.topMargin: 16
             }
 
-            Row {
+            Rectangle {
                 id: row3
                 height: 61
+                color: "#00000000"
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.top: row2.bottom
@@ -171,9 +176,10 @@ Window {
                 }
             }
 
-            Row {
+            Rectangle {
                 id: row4
                 height: 61
+                color: "#00000000"
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.top: row3.bottom
@@ -198,7 +204,9 @@ Window {
 
                     Connections {
                         target: captureRegionSelectButton
-                        onClicked: screenRegionSelector.show()
+                        function onClicked() {
+                            screenRegionSelector.show()
+                        }
                     }
                 }
 
@@ -214,7 +222,7 @@ Window {
 
                     Connections {
                         target: captureRegionResetButton
-                        onClicked: function () {
+                        function onClicked() {
                             captureRegionSelectButton.text = "SELECT"
                             captureRegionResetButton.enabled = false
                             backend.resetCaptureRegion()
@@ -244,9 +252,10 @@ Window {
                 }
             }
 
-            Row {
+            Rectangle {
                 id: row5
                 height: 61
+                color: "#00000000"
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.top: row4.bottom
