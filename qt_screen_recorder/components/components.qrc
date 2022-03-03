@@ -1,0 +1,11 @@
+<RCC>
+    <qresource prefix="/components">
+        <file>ConfigPanel.qml</file>
+        <file>ControlPanel.qml</file>
+        <file>ScreenRegionSelector.qml</file>
+        <file>MaterialDesignIcon/MaterialDesignIcon.qml</file>
+        <file>MaterialDesignIcon/MaterialDesignIconGlyphs.js</file>
+        <file>ErrorDialog.qml</file>
+        <file>PermissionsSetupPanel.qml</file>
+    </qresource>
+</RCC>
