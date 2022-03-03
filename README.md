@@ -89,6 +89,6 @@ C:\Qt\6.2.3\msvc2019_64\bin\windeployqt.exe -qmldir ..\..\..\qt_screen_recorder\
 
 7. Run
 ```
-set QSG_RHI_BACKEND=opengl
+set QSG_RHI_BACKEND=opengl // Might be needed for VMs
 appqt_screen_recorder.exe
 ```
