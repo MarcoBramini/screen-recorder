@@ -26,7 +26,7 @@ extern "C" {
 // Settings
 const AVSampleFormat OUTPUT_AUDIO_SAMPLE_FMT = AV_SAMPLE_FMT_FLTP;
 const AVPixelFormat OUTPUT_VIDEO_PIXEL_FMT = AV_PIX_FMT_YUV420P;
-const int64_t OUTPUT_VIDEO_BIT_RATE = 1500000;
+const int64_t OUTPUT_VIDEO_BIT_RATE = 2000000;
 const int64_t OUTPUT_AUDIO_BIT_RATE = 96000;
 
 enum RecordingStatus {
@@ -101,16 +101,16 @@ class RecordingServiceImpl {
 
     // recording_utils.cpp
     static std::map<std::string, std::string> get_device_options(
-            const std::string &deviceID,
-            const RecordingConfig &config);
+        const std::string &deviceID,
+        const RecordingConfig &config);
 
     static std::tuple<std::string, std::string> unpackDeviceAddress(
-            const std::string &deviceAddress);
+        const std::string &deviceAddress);
 
     static std::tuple<int, int, int, int, int, int> get_output_image_parameters(
-            int deviceInputWidth,
-            int deviceInputHeight,
-            const RecordingConfig &config);
+        int deviceInputWidth,
+        int deviceInputHeight,
+        const RecordingConfig &config);
 
     // recording_service.cpp
     void start_capture_loop(PacketCapturer &capturer);

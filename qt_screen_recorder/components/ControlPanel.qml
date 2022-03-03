@@ -345,6 +345,7 @@ Rectangle {
 
             PropertyChanges {
                 target: recButton
+                visible: true
                 hoverEnabled: false
                 enabled: false
             }
