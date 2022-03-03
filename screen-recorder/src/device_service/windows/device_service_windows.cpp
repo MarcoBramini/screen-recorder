@@ -56,7 +56,7 @@ std::vector<InputDeviceVideo> DeviceService::get_input_video_devices() {
           printf("%S\n", var.bstrVal);
 
           devices.emplace_back(
-              fmt::format("video=\"{}\"",
+              fmt::format("video={}",
                           _com_util::ConvertBSTRToString(var.bstrVal)),
               "dshow", _com_util::ConvertBSTRToString(var.bstrVal), 0.0f, 0.0f,
               0.0f, 0.0f, true, "0");
@@ -102,7 +102,7 @@ std::vector<InputDeviceAudio> DeviceService::get_input_audio_devices() {
         hr = pPropBag->Read(L"FriendlyName", &var, 0);
         if (SUCCEEDED(hr)) {
           devices.emplace_back(
-              fmt::format("audio=\"{}\"",
+              fmt::format("audio={}",
                           _com_util::ConvertBSTRToString(var.bstrVal)),
               "dshow", _com_util::ConvertBSTRToString(var.bstrVal));
           VariantClear(&var);

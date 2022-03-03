@@ -64,7 +64,7 @@ git clone https://github.com/Microsoft/vcpkg.git
 cd vcpkg
 .\bootstrap-vcpkg.bat
 .\vcpkg integrate install
-.\vcpkg install ffmpeg[avcodec,avdevice,avfilter,avformat,avresample,core,gpl,postproc,swresample,swscale,x264]:x64-windows
+.\vcpkg install ffmpeg[avcodec,avdevice,avfilter,avformat,avresample,core,gpl,postproc,swresample,swscale,x264,ffmpeg]:x64-windows
 .\vcpkg install fmt:x64-windows
 ```
 
