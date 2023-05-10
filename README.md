@@ -4,6 +4,8 @@ A library to capture and record from your audio and video devices.
 
 Contains the main library and two example applications (command line and graphic interface).
 
+A video presentation of the QT application can be found [here](../blob/master/docs/qt_screen_recorder_presentation.mov).
+
 # Build
 
 ## MacOS
